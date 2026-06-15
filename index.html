@@ -663,13 +663,14 @@ document.getElementById('extractBtn').addEventListener('click', () => {
   }
   const text = document.getElementById('planningInput').value;
   const extracted = extractMissions(text, porter);
-  if(extracted.length === 0 && missions.length === 0){
+  if(extracted.length === 0){
+    missions = [];
     document.getElementById('missionsContainer').innerHTML =
       '<div class="empty">Aucune mission trouvée pour "' + porter + '" dans ce texte. Vérifie le nom ou le collage du planning.</div>' +
       '<button class="btn full-ghost" onclick="addManualMission()">+ Ajouter une mission manuelle</button>';
     return;
   }
-  missions = missions.concat(extracted);
+  missions = extracted;
   render();
 });
 
