@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rapports de mission</title>
+<style>
+  :root{
+    --navy:#10243d;
+    --navy-2:#1c3a5e;
+    --amber:#e6a23c;
+    --bg:#f4f6f8;
+    --card:#ffffff;
+    --line:#dde3ea;
+    --text:#1a1f29;
+    --muted:#6b7585;
+    --ok:#2e7d4f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding-bottom:60px;
+  }
+  header{
+    background:var(--navy);
+    color:#fff;
+    padding:20px 16px 16px;
+    border-bottom:3px solid var(--amber);
+  }
+  header h1{
+    margin:0;
+    font-size:1.25rem;
+    font-weight:700;
+    letter-spacing:.02em;
+  }
+  header p{
+    margin:6px 0 0;
+    font-size:.82rem;
+    color:#b9c6d6;
+  }
+  main{
+    padding:16px;
+    max-width:640px;
+    margin:0 auto;
+  }
+  .panel{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:14px;
+    margin-bottom:16px;
+  }
+  .panel h2{
+    font-size:.95rem;
+    margin:0 0 8px;
+    color:var(--navy-2);
+  }
+  textarea{
+    width:100%;
+    min-height:140px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px;
+    font-size:.85rem;
+    font-family:inherit;
+    resize:vertical;
+  }
+  .btn{
+    display:inline-block;
+    background:var(--navy);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:11px 18px;
+    font-size:.9rem;
+    font-weight:600;
+    cursor:pointer;
+    margin-top:10px;
+    width:100%;
+  }
+  .btn.secondary{
+    background:var(--amber);
+    color:#10243d;
+  }
+  .btn.ghost{
+    background:transparent;
+    color:var(--navy-2);
+    border:1px solid var(--line);
+    font-weight:500;
+    padding:8px 14px;
+    width:auto;
+  }
+  .btn.full-ghost{
+    background:transparent;
+    color:var(--navy-2);
+    border:1px dashed var(--line);
+    font-weight:600;
+    width:100%;
+  }
+  .hint{
+    font-size:.75rem;
+    color:var(--muted);
+    margin-top:6px;
+  }
+  .mission{
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    margin-bottom:14px;
+    overflow:hidden;
+  }
+  .mission-head{
+    background:var(--navy-2);
+    color:#fff;
+    padding:10px 14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+  }
+  .mission-head strong{font-size:.95rem;}
+  .mission-head .right{display:flex;align-items:center;gap:10px;}
+  .mission-head .badge{
+    font-size:.7rem;
+    background:var(--amber);
+    color:#10243d;
+    padding:2px 8px;
+    border-radius:20px;
+    font-weight:700;
+  }
+  .mission-head .del{
+    background:none;
+    border:none;
+    color:#fff;
+    font-size:1.05rem;
+    cursor:pointer;
+    line-height:1;
+    padding:0;
+    opacity:.8;
+  }
+  .mission-body{padding:12px 14px;}
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  .field{margin-bottom:8px;}
+  .field.full{grid-column:1 / -1;}
+  label{
+    display:block;
+    font-size:.72rem;
+    color:var(--muted);
+    margin-bottom:3px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+  input, select, textarea.small{
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:8px;
+    font-size:.88rem;
+    font-family:inherit;
+    background:#fcfdfe;
+  }
+  textarea.small{min-height:50px;resize:vertical;}
+  .autre-input{margin-top:6px;}
+  .total-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    background:#eef2f6;
+    border-radius:6px;
+    padding:8px 10px;
+    margin:6px 0 10px;
+    font-size:.85rem;
+  }
+  .total-row strong{color:var(--navy);}
+  .output{
+    margin-top:10px;
+    border-top:1px dashed var(--line);
+    padding-top:10px;
+  }
+  pre{
+    background:#f8f9fb;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px;
+    font-size:.78rem;
+    white-space:pre-wrap;
+    word-break:break-word;
+    margin:8px 0;
+    font-family:"SF Mono",Menlo,Consolas,monospace;
+  }
+  .copy-feedback{
+    font-size:.78rem;
+    color:var(--ok);
+    font-weight:600;
+    margin-left:8px;
+    opacity:0;
+    transition:opacity .2s;
+  }
+  .copy-feedback.show{opacity:1;}
+  .empty{
+    text-align:center;
+    color:var(--muted);
+    font-size:.85rem;
+    padding:30px 10px;
+  }
+  .actions-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Rapports de mission</h1>
+  <p>Choisis le porteur, colle le planning du jour, extrait automatiquement ses missions et complète les champs restants.</p>
+</header>
+
+<main>
+  <div class="panel">
+    <h2>1. Porteur</h2>
+    <div class="field">
+      <label>Nom du porteur</label>
+      <select id="porterSelect" onchange="togglePorterCustom()">
+        <option>Damien P.</option>
+        <option>François L.</option>
+        <option>Bounmy S</option>
+        <option>Ghassan S.</option>
+        <option>Falco P.</option>
+        <option>Eddy PLASZOWSKI</option>
+        <option>Ibragim C.</option>
+        <option>Jacob T.</option>
+        <option>Ryan R.</option>
+        <option>Jean-François M.</option>
+        <option>Yaris K.</option>
+        <option>David AZIB</option>
+        <option>Fabien T.</option>
+        <option>Kaïs RAHALI</option>
+        <option>Denis L.</option>
+        <option>Antoine D.</option>
+        <option>Terry D.</option>
+        <option value="custom">Autre...</option>
+      </select>
+    </div>
+    <div class="field" id="porterCustomField" style="display:none">
+      <label>Nom exact (comme dans le planning)</label>
+      <input id="porterCustom" placeholder="ex: Bastien">
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>2. Planning du jour</h2>
+    <textarea id="planningInput" placeholder="Colle ici le texte du planning (export PDF)..."></textarea>
+    <button class="btn" id="extractBtn">Extraire les missions de ce porteur</button>
+    <div class="hint">L'extraction repère les blocs contenant le nom choisi et préremplit booking, vol, terminal, type de service et date. Tous les champs restent modifiables. Chaque clic ajoute les missions trouvées sans effacer les cartes existantes.</div>
+  </div>
+
+  <div id="missionsContainer"></div>
+</main>
+
+<script>
+let defaults = {
+  prebooking: 'PRE BOOKING',
+  detaxe: 'Non',
+  lieuRencontre: 'Dépose minute',
+  lieuRencontreAutre: '',
+  lieuDepose: 'Tapis bagage',
+  lieuDeposeAutre: '',
+  probleme: 'Non',
+  porteurs: '1',
+  satisfaction: 'Excellente',
+  bagStandard: '1',
+  bagHorsFormat: '0',
+  bagCage: '0'
+};
+
+let missions = [];
+
+function emptyMission(){
+  return {
+    booking:'', date: todayStr(), vol:'', terminal:'', type:'DEP', client:'', greeteur:'', pax:'',
+    prebooking: defaults.prebooking,
+    detaxe: defaults.detaxe,
+    lieuRencontre: defaults.lieuRencontre,
+    lieuRencontreAutre: defaults.lieuRencontreAutre,
+    lieuDepose: 'AUTO_CHECKIN',
+    lieuDeposeAutre: defaults.lieuDeposeAutre,
+    probleme: defaults.probleme,
+    porteurs: defaults.porteurs,
+    satisfaction: defaults.satisfaction,
+    bagStandard: defaults.bagStandard,
+    bagHorsFormat: defaults.bagHorsFormat,
+    bagCage: defaults.bagCage
+  };
+}
+
+function saveDefaults(d){
+  defaults = Object.assign({}, defaults, d);
+}
+
+function escapeRegex(s){
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function todayStr(){
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  return `${dd}/${mm}`;
+}
+
+function togglePorterCustom(){
+  const sel = document.getElementById('porterSelect');
+  document.getElementById('porterCustomField').style.display = sel.value === 'custom' ? 'block' : 'none';
+}
+
+function getPorterName(){
+  const sel = document.getElementById('porterSelect');
+  if(sel.value === 'custom'){
+    return document.getElementById('porterCustom').value.trim();
+  }
+  return sel.value;
+}
+
+function extractMissions(text, porterName){
+  const lines = text.split('\n');
+  const bookingLineRe = /^\s*(\d{3,6}-\d+)\s*$/;
+  const entries = [];
+  let current = null;
+  for(const line of lines){
+    const m = line.match(bookingLineRe);
+    if(m){
+      if(current) entries.push(current);
+      current = {booking: m[1], text: line + '\n'};
+    } else if(current){
+      current.text += line + '\n';
+    }
+  }
+  if(current) entries.push(current);
+
+  const porterRe = new RegExp(escapeRegex(porterName), 'i');
+  const found = [];
+
+  for(const entry of entries){
+    const idx = entry.text.search(porterRe);
+    if(idx === -1) continue;
+
+    const before = entry.text.slice(Math.max(0, idx - 450), idx);
+    const after = entry.text.slice(idx, idx + 160);
+
+    const dateMatch = entry.text.match(/(\d{2})\/(\d{2})\/\d{4}/);
+    const date = dateMatch ? `${dateMatch[1]}/${dateMatch[2]}` : todayStr();
+
+    const volMatches = [...before.matchAll(/N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})/gi)];
+    const vol = volMatches.length ? volMatches[volMatches.length-1][1].toUpperCase() : '';
+
+    const termMatches = [...before.matchAll(/Terminal\s*([A-Za-z0-9]{1,2})/gi)];
+    let terminal = termMatches.length ? termMatches[termMatches.length-1][1] : '';
+    terminal = terminal.replace(/^T/i, '');
+
+    let type = '';
+    if(/arriv[ée]e/i.test(after)) type = 'ARR';
+    else if(/d[ée]part/i.test(after)) type = 'DEP';
+    else if(/arriv[ée]e/i.test(before)) type = 'ARR';
+    else if(/d[ée]part/i.test(before)) type = 'DEP';
+
+    let lieuDepose = type === 'ARR' ? 'Tapis bagage' : 'AUTO_CHECKIN';
+    if(/D[ée]pose-?\s*minute/i.test(before)) lieuDepose = 'Dépose minute';
+    else if(/Parking\s*Pro/i.test(before)) lieuDepose = 'Parking pro';
+
+    const clientCandidates = [];
+    for(const m2 of before.matchAll(/Monaco Mediax/gi)) clientCandidates.push({i:m2.index, v:'Monaco Mediax'});
+    for(const m2 of before.matchAll(/ACA \([^)]+\)/gi)) clientCandidates.push({i:m2.index, v:'ACA (Aéroport Nice Côte d\'Azur)'});
+    let client = '';
+    if(clientCandidates.length){
+      clientCandidates.sort((a,b)=>a.i-b.i);
+      client = clientCandidates[clientCandidates.length-1].v;
+    }
+
+    const paxMatches = [...before.matchAll(/\((\d+)\)/g)];
+    const pax = paxMatches.length ? paxMatches[paxMatches.length-1][1] : '';
+
+    const greeterMatches = [...before.matchAll(/Greete?r\s*:*\s*([^\n]+)/gi)];
+    const greeteur = greeterMatches.length ? greeterMatches[greeterMatches.length-1][1].trim() : '';
+
+    const mNumMatch = entry.text.match(/M#\s*(\d+)/);
+    const booking = entry.booking + (mNumMatch ? ' M#' + mNumMatch[1] : '');
+
+    const mission = emptyMission();
+    Object.assign(mission, {booking, date, vol, terminal, type, lieuDepose, client, greeteur, pax});
+    found.push(mission);
+  }
+  return found;
+}
+
+function fieldId(idx, name){ return `m${idx}_${name}`; }
+
+function renderMission(m, idx){
+  const total = (parseInt(m.bagStandard)||0) + (parseInt(m.bagHorsFormat)||0) + (parseInt(m.bagCage)||0);
+  return `
+  <div class="mission" data-idx="${idx}">
+    <div class="mission-head">
+      <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}</strong>
+      <div class="right">
+        <span class="badge">${m.type || '—'}</span>
+        <button class="del" onclick="removeMission(${idx})" title="Supprimer">✕</button>
+      </div>
+    </div>
+    <div class="mission-body">
+      <div class="grid">
+        <div class="field"><label>Booking #</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
+        <div class="field"><label>Date</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
+        <div class="field full"><label>Client</label><input id="${fieldId(idx,'client')}" value="${m.client}"></div>
+        <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" value="${m.greeteur}" placeholder="ex: Linda.K"></div>
+        <div class="field">
+          <label>Pré-booking / Live</label>
+          <select id="${fieldId(idx,'prebooking')}">
+            <option ${m.prebooking==='PRE BOOKING'?'selected':''}>PRE BOOKING</option>
+            <option ${m.prebooking==='LIVE'?'selected':''}>LIVE</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Type de service</label>
+          <select id="${fieldId(idx,'type')}">
+            <option value="DEP" ${m.type==='DEP'?'selected':''}>DEP</option>
+            <option value="ARR" ${m.type==='ARR'?'selected':''}>ARR</option>
+          </select>
+        </div>
+        <div class="field"><label>Vol - code IATA</label><input id="${fieldId(idx,'vol')}" value="${m.vol}"></div>
+        <div class="field"><label>Terminal</label><input id="${fieldId(idx,'terminal')}" value="${m.terminal}"></div>
+        <div class="field"><label>Nombre de passagers</label><input id="${fieldId(idx,'pax')}" value="${m.pax}" inputmode="numeric"></div>
+      </div>
+
+      <div class="grid">
+        <div class="field"><label>Bagages standard</label><input id="${fieldId(idx,'bagStandard')}" value="${m.bagStandard}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+        <div class="field"><label>Hors format</label><input id="${fieldId(idx,'bagHorsFormat')}" value="${m.bagHorsFormat}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+        <div class="field full"><label>Cage animal</label><input id="${fieldId(idx,'bagCage')}" value="${m.bagCage}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+      </div>
+      <div class="total-row">
+        <span>Total bagages pris en charge</span>
+        <strong id="${fieldId(idx,'total')}">${total}</strong>
+      </div>
+
+      <div class="grid">
+        <div class="field">
+          <label>Détaxe</label>
+          <select id="${fieldId(idx,'detaxe')}">
+            <option ${m.detaxe==='Non'?'selected':''}>Non</option>
+            <option ${m.detaxe==='Oui'?'selected':''}>Oui</option>
+            <option ${m.detaxe==='N/A'?'selected':''}>N/A</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Nombre de porteurs</label>
+          <input id="${fieldId(idx,'porteurs')}" value="${m.porteurs}">
+        </div>
+
+        <div class="field">
+          <label>Lieu de rencontre</label>
+          <select id="${fieldId(idx,'lieuRencontre')}" onchange="toggleAutre(${idx},'lieuRencontre')">
+            <option ${m.lieuRencontre==='Dépose minute'?'selected':''}>Dépose minute</option>
+            <option ${m.lieuRencontre==='Tapis bagage'?'selected':''}>Tapis bagage</option>
+            <option ${m.lieuRencontre==='Parking pro'?'selected':''}>Parking pro</option>
+            <option ${m.lieuRencontre==='Linéaire Professionnel'?'selected':''}>Linéaire Professionnel</option>
+            <option value="Autre" ${m.lieuRencontre==='Autre'?'selected':''}>Autre...</option>
+          </select>
+          <input class="autre-input" id="${fieldId(idx,'lieuRencontreAutre')}" placeholder="Précise le lieu" value="${m.lieuRencontreAutre||''}" style="display:${m.lieuRencontre==='Autre'?'block':'none'}">
+        </div>
+
+        <div class="field">
+          <label>Lieu de dépose</label>
+          <select id="${fieldId(idx,'lieuDepose')}" onchange="toggleAutre(${idx},'lieuDepose')">
+            <option value="AUTO_CHECKIN" ${m.lieuDepose==='AUTO_CHECKIN'?'selected':''}>Check-in + vol (${m.vol || '...'})</option>
+            <option ${m.lieuDepose==='Dépose minute'?'selected':''}>Dépose minute</option>
+            <option ${m.lieuDepose==='Tapis bagage'?'selected':''}>Tapis bagage</option>
+            <option ${m.lieuDepose==='Parking pro'?'selected':''}>Parking pro</option>
+            <option value="Autre" ${m.lieuDepose==='Autre'?'selected':''}>Autre...</option>
+          </select>
+          <input class="autre-input" id="${fieldId(idx,'lieuDeposeAutre')}" placeholder="Précise le lieu" value="${m.lieuDeposeAutre||''}" style="display:${m.lieuDepose==='Autre'?'block':'none'}">
+        </div>
+
+        <div class="field full"><label>Problème rencontré ?</label><textarea class="small" id="${fieldId(idx,'probleme')}">${m.probleme}</textarea></div>
+
+        <div class="field full">
+          <label>Satisfaction client</label>
+          <select id="${fieldId(idx,'satisfaction')}">
+            <option ${m.satisfaction==='Excellente'?'selected':''}>Excellente</option>
+            <option ${m.satisfaction==='Très bien'?'selected':''}>Très bien</option>
+            <option ${m.satisfaction==='Bonne'?'selected':''}>Bonne</option>
+            <option ${m.satisfaction==='Moyenne'?'selected':''}>Moyenne</option>
+            <option ${m.satisfaction==='Mauvaise'?'selected':''}>Mauvaise</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <button class="btn secondary" style="width:auto;flex:1" onclick="generateReport(${idx})">Générer le rapport</button>
+        <span class="copy-feedback" id="${fieldId(idx,'feedback')}">Copié ✓</span>
+      </div>
+      <div class="output" id="${fieldId(idx,'output')}" style="display:none">
+        <pre id="${fieldId(idx,'pre')}"></pre>
+        <button class="btn ghost" onclick="copyReport(${idx})">Copier le texte</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function render(){
+  const container = document.getElementById('missionsContainer');
+  let html = '';
+  if(missions.length === 0){
+    html += '<div class="empty">Aucune mission pour l\'instant. Extrais le planning ou ajoute une mission manuelle.</div>';
+  } else {
+    html += missions.map((m,i)=>renderMission(m,i)).join('');
+  }
+  html += '<button class="btn full-ghost" onclick="addManualMission()">+ Ajouter une mission manuelle</button>';
+  container.innerHTML = html;
+}
+
+function syncAll(){
+  missions.forEach((m, idx) => {
+    for(const key of Object.keys(m)){
+      const el = document.getElementById(fieldId(idx, key));
+      if(el) m[key] = el.value;
+    }
+  });
+}
+
+function addManualMission(){
+  syncAll();
+  missions.push(emptyMission());
+  render();
+}
+
+function removeMission(idx){
+  syncAll();
+  missions.splice(idx,1);
+  render();
+}
+
+function toggleAutre(idx, field){
+  const sel = document.getElementById(fieldId(idx, field));
+  const inp = document.getElementById(fieldId(idx, field+'Autre'));
+  inp.style.display = sel.value === 'Autre' ? 'block' : 'none';
+}
+
+function updateTotal(idx){
+  const s = parseInt(document.getElementById(fieldId(idx,'bagStandard')).value)||0;
+  const h = parseInt(document.getElementById(fieldId(idx,'bagHorsFormat')).value)||0;
+  const c = parseInt(document.getElementById(fieldId(idx,'bagCage')).value)||0;
+  document.getElementById(fieldId(idx,'total')).textContent = s+h+c;
+}
+
+function val(idx,name){
+  const el = document.getElementById(fieldId(idx,name));
+  return el ? el.value.trim() : '';
+}
+
+function resolveLieu(idx, field){
+  const selVal = val(idx, field);
+  if(selVal === 'Autre'){
+    return val(idx, field+'Autre');
+  }
+  if(selVal === 'AUTO_CHECKIN'){
+    const vol = val(idx,'vol');
+    return vol ? `Check in ${vol}` : 'Check in';
+  }
+  return selVal;
+}
+
+function generateReport(idx){
+  const total = (parseInt(val(idx,'bagStandard'))||0) + (parseInt(val(idx,'bagHorsFormat'))||0) + (parseInt(val(idx,'bagCage'))||0);
+  const lieuRencontre = resolveLieu(idx,'lieuRencontre');
+  const lieuDepose = resolveLieu(idx,'lieuDepose');
+  const greeteur = val(idx,'greeteur');
+  const greeteurLine = greeteur ? `\nGreeteur : ${greeteur}` : '';
+
+  const report =
+`1. Informations générales
+Booking # : ${val(idx,'booking')}
+Date : ${val(idx,'date')}
+Client : ${val(idx,'client')}${greeteurLine}
+Pré-booking ou Live : ${val(idx,'prebooking')}
+Type de service : ${val(idx,'type')}
+Vol - code IATA : ${val(idx,'vol')}
+Terminal : ${val(idx,'terminal')}
+Nombre de passagers : ${val(idx,'pax')}
+
+2. Bagages
+Nombre de bagages Standard : ${val(idx,'bagStandard')}
+Hors format : ${val(idx,'bagHorsFormat')}
+Cage animal : ${val(idx,'bagCage')}
+
+Total Bagages pris en charge : ${total}
+
+3. Service
+Détaxe : ${val(idx,'detaxe')}
+Lieu de rencontre : ${lieuRencontre}
+Lieu de dépose : ${lieuDepose}
+
+4. Un problème rencontré ?
+${val(idx,'probleme')}
+
+5. Ressources
+Nombre de porteurs : ${val(idx,'porteurs')}
+
+6. Qualité
+Satisfaction client : ${val(idx,'satisfaction')}`;
+
+  document.getElementById(fieldId(idx,'pre')).textContent = report;
+  document.getElementById(fieldId(idx,'output')).style.display = 'block';
+
+  saveDefaults({
+    prebooking: val(idx,'prebooking'),
+    detaxe: val(idx,'detaxe'),
+    lieuRencontre: val(idx,'lieuRencontre'),
+    lieuRencontreAutre: val(idx,'lieuRencontreAutre'),
+    lieuDepose: val(idx,'lieuDepose'),
+    lieuDeposeAutre: val(idx,'lieuDeposeAutre'),
+    probleme: val(idx,'probleme'),
+    porteurs: val(idx,'porteurs'),
+    satisfaction: val(idx,'satisfaction'),
+    bagStandard: val(idx,'bagStandard'),
+    bagHorsFormat: val(idx,'bagHorsFormat'),
+    bagCage: val(idx,'bagCage')
+  });
+
+  copyReport(idx);
+}
+
+async function copyReport(idx){
+  const text = document.getElementById(fieldId(idx,'pre')).textContent;
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  const fb = document.getElementById(fieldId(idx,'feedback'));
+  fb.classList.add('show');
+  setTimeout(()=>fb.classList.remove('show'), 1500);
+}
+
+document.getElementById('extractBtn').addEventListener('click', () => {
+  syncAll();
+  const porter = getPorterName();
+  if(!porter){
+    alert('Indique un nom de porteur.');
+    return;
+  }
+  const text = document.getElementById('planningInput').value;
+  const extracted = extractMissions(text, porter);
+  if(extracted.length === 0 && missions.length === 0){
+    document.getElementById('missionsContainer').innerHTML =
+      '<div class="empty">Aucune mission trouvée pour "' + porter + '" dans ce texte. Vérifie le nom ou le collage du planning.</div>' +
+      '<button class="btn full-ghost" onclick="addManualMission()">+ Ajouter une mission manuelle</button>';
+    return;
+  }
+  missions = missions.concat(extracted);
+  render();
+});
+
+render();
+</script>
+
+</body>
+</html>
