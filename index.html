@@ -216,6 +216,47 @@
     gap:8px;
     margin-top:10px;
   }
+  .candidates{
+    background:#fff7ea;
+    border:1px solid #f0d9b0;
+    border-radius:8px;
+    padding:10px;
+    margin-bottom:10px;
+  }
+  .candidates .clabel{
+    font-size:.72rem;
+    color:#9a6b1e;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    margin-bottom:6px;
+    font-weight:600;
+  }
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+  .chips:last-child{margin-bottom:0;}
+  .csub{
+    font-size:.78rem;
+    color:#9a6b1e;
+    margin:4px 0 4px;
+    font-weight:600;
+  }
+  .chip{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:6px 12px;
+    font-size:.8rem;
+    cursor:pointer;
+    color:var(--navy-2);
+  }
+  .chip.active{
+    background:var(--navy);
+    color:#fff;
+    border-color:var(--navy);
+  }
+  .pdfrow { margin-bottom: 8px; }
+  .pdfbtn { display: inline-block; cursor: pointer; background: #2c3e50; }
+  .pdfbtn:hover { background: #1a252f; }
+  .orsep { text-align: center; color: #aaa; font-size: .8rem; margin: 8px 0; letter-spacing: .05em; }
 </style>
 </head>
 <body>
@@ -232,22 +273,27 @@
       <label>Nom du porteur</label>
       <select id="porterSelect" onchange="togglePorterCustom()">
         <option>Damien P.</option>
-        <option>François L.</option>
+        <option>Antoine D.</option>
+        <option>Bastien D</option>
         <option>Bounmy S</option>
-        <option>Ghassan S.</option>
-        <option>Falco P.</option>
+        <option>David AZIB</option>
+        <option>Denis L.</option>
         <option>Eddy PLASZOWSKI</option>
+        <option>Fabien T.</option>
+        <option>Falco P.</option>
+        <option>François L.</option>
+        <option>Ghassan S.</option>
         <option>Ibragim C.</option>
         <option>Jacob T.</option>
-        <option>Ryan R.</option>
         <option>Jean-François M.</option>
-        <option>Yaris K.</option>
-        <option>David AZIB</option>
-        <option>Fabien T.</option>
         <option>Kaïs RAHALI</option>
-        <option>Denis L.</option>
-        <option>Antoine D.</option>
+        <option>Paul PASTISSON</option>
+        <option>Pierre R.</option>
+        <option>Ryan R.</option>
         <option>Terry D.</option>
+        <option>Thomas C.</option>
+        <option>Yanis P.</option>
+        <option>Yaris K.</option>
         <option value="custom">Autre...</option>
       </select>
     </div>
@@ -259,17 +305,25 @@
 
   <div class="panel">
     <h2>2. Planning du jour</h2>
-    <textarea id="planningInput" placeholder="Colle ici le texte du planning (export PDF)..."></textarea>
+    <div class="pdfrow">
+      <label class="btn pdfbtn" for="pdfInput">📄 Charger le PDF (recommandé)</label>
+      <input id="pdfInput" type="file" accept="application/pdf" style="display:none">
+    </div>
+    <div id="pdfStatus" class="hint" style="display:none"></div>
+    <div class="orsep">— ou colle le texte —</div>
+    <textarea id="planningInput" placeholder="Colle ici le texte du planning..."></textarea>
     <button class="btn" id="extractBtn">Extraire les missions de ce porteur</button>
-    <div class="hint">L'extraction repère les blocs contenant le nom choisi et préremplit booking, vol, terminal, type de service et date. Tous les champs restent modifiables. Chaque clic ajoute les missions trouvées sans effacer les cartes existantes.</div>
+    <div class="hint">Le PDF est lu directement sur ton téléphone (rien n'est envoyé en ligne) et évite les pages mélangées. Le copier-coller reste possible. Tous les champs restent modifiables.</div>
   </div>
 
   <div id="missionsContainer"></div>
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
 <script>
 let defaults = {
-  prebooking: 'PRE BOOKING',
+  prebooking: 'PRÉ-BOOKING',
   detaxe: 'Non',
   lieuRencontre: 'Dépose minute',
   lieuRencontreAutre: '',
@@ -299,7 +353,10 @@ function emptyMission(){
     satisfaction: defaults.satisfaction,
     bagStandard: defaults.bagStandard,
     bagHorsFormat: defaults.bagHorsFormat,
-    bagCage: defaults.bagCage
+    bagCage: defaults.bagCage,
+    sortTime: 9999,
+    bookingOptions: [],
+    flightOptions: []
   };
 }
 
@@ -332,77 +389,485 @@ function getPorterName(){
 }
 
 function extractMissions(text, porterName){
-  const lines = text.split('\n');
-  const bookingLineRe = /^\s*(\d{3,6}-\d+)\s*$/;
-  const entries = [];
-  let current = null;
-  for(const line of lines){
-    const m = line.match(bookingLineRe);
-    if(m){
-      if(current) entries.push(current);
-      current = {booking: m[1], text: line + '\n'};
-    } else if(current){
-      current.text += line + '\n';
-    }
-  }
-  if(current) entries.push(current);
-
-  const porterRe = new RegExp(escapeRegex(porterName), 'i');
+  // ---------------------------------------------------------------------------
+  // Two serialisations exist:
+  //  (1) "copier-coller" : columns are dumped per sub-section inside a cluster
+  //      (all bookings, then all flights, then all notes/porters, then all types).
+  //  (2) pdf.js          : rows are locally coherent.
+  // Clean rows (one booking + one flight in the immediate row) are handled by a
+  // fast-path identical to before. Scrambled clusters are resolved by RANK
+  // ALIGNMENT inside the cluster: the Nth porter ↔ Nth booking/flight/type.
+  // The gate trusts an assignment only when booking-rows, flights and porters
+  // agree in count (these retain cancelled slots); client/type are aligned when
+  // their own counts match, else derived per-row with safe fallbacks; otherwise
+  // chips are shown (no silent wrong guess).
+  // ---------------------------------------------------------------------------
   const found = [];
 
-  for(const entry of entries){
-    const idx = entry.text.search(porterRe);
-    if(idx === -1) continue;
+  // ---- shared helpers ----
+  const HEADER = /Mission Date\/Heures Client/gi;
 
-    const before = entry.text.slice(Math.max(0, idx - 450), idx);
-    const after = entry.text.slice(idx, idx + 160);
+  function clusterSpans(){
+    let m, H=[]; HEADER.lastIndex=0;
+    while((m=HEADER.exec(text))!==null) H.push(m.index);
+    return H;
+  }
 
-    const dateMatch = entry.text.match(/(\d{2})\/(\d{2})\/\d{4}/);
-    const date = dateMatch ? `${dateMatch[1]}/${dateMatch[2]}` : todayStr();
-
-    const volMatches = [...before.matchAll(/N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})/gi)];
-    const vol = volMatches.length ? volMatches[volMatches.length-1][1].toUpperCase() : '';
-
-    const termMatches = [...before.matchAll(/Terminal\s*([A-Za-z0-9]{1,2})/gi)];
-    let terminal = termMatches.length ? termMatches[termMatches.length-1][1] : '';
-    terminal = terminal.replace(/^T/i, '');
-
-    let type = '';
-    if(/arriv[ée]e/i.test(after)) type = 'ARR';
-    else if(/d[ée]part/i.test(after)) type = 'DEP';
-    else if(/arriv[ée]e/i.test(before)) type = 'ARR';
-    else if(/d[ée]part/i.test(before)) type = 'DEP';
-
-    let lieuDepose = type === 'ARR' ? 'Tapis bagage' : 'AUTO_CHECKIN';
-    if(/D[ée]pose-?\s*minute/i.test(before)) lieuDepose = 'Dépose minute';
-    else if(/Parking\s*Pro/i.test(before)) lieuDepose = 'Parking pro';
-
-    const clientCandidates = [];
-    for(const m2 of before.matchAll(/Monaco Mediax/gi)) clientCandidates.push({i:m2.index, v:'Monaco Mediax'});
-    for(const m2 of before.matchAll(/ACA \([^)]+\)/gi)) clientCandidates.push({i:m2.index, v:'ACA (Aéroport Nice Côte d\'Azur)'});
-    let client = '';
-    if(clientCandidates.length){
-      clientCandidates.sort((a,b)=>a.i-b.i);
-      client = clientCandidates[clientCandidates.length-1].v;
+  function tokBookingRows(sec){
+    const lines=sec.split('\n'); const out=[];
+    for(let i=0;i<lines.length;i++){
+      const t=lines[i].trim();
+      const refs=[...t.matchAll(/(\d{4,6}-\d+)\b/g)].map(x=>x[1]).filter(r=>!/^20\d{2}-\d{6}$/.test(r));
+      for(const r of refs){
+        let mnum=null, clientRef=null;
+        for(let k=1;k<=8 && i+k<lines.length;k++){
+          const tt=lines[i+k].trim();
+          // stop at the next mission row: a booking ref on any following line
+          // means this row owns no M# (column-dumped Monaco rows).
+          if(/^\d{4,6}-\d+/.test(tt)) break;
+          if(/^\d{2}\/\d{2}\/\d{4}/.test(tt) && k>1) break;
+          const md=tt.match(/^M#\s*(\d+)$/); if(md && !mnum) mnum=md[1];
+          const cr=tt.match(/\[(20\d{2}-\d{6})\]/); if(cr && !clientRef) clientRef=cr[1];
+        }
+        out.push({ref:r, m:mnum, clientRef});
+      }
     }
+    return out;
+  }
+  function tokClients(sec){
+    const lines=sec.split('\n'); const o=[];
+    for(let i=0;i<lines.length;i++){
+      const t=lines[i].trim();
+      if(/^ACA \(A[ée]roport/.test(t)) o.push({tok:'ACA'});
+      else if(/^Monaco Mediax/.test(t)) o.push({tok:'Monaco'});
+      else if(/^WELL'COM AIR/.test(t)) o.push({tok:'WELLCOM'});
+      else {
+        const br=t.match(/^(.+?)\s*\[(20\d{2}-\d{6})\]/);
+        if(br) o.push({tok:'AGENCY', ref:br[2], name:br[1].trim()});
+      }
+    }
+    return o;
+  }
+  function tokFlights(sec){
+    const re=/N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})[^]*?Terminal\s*(T?\d{1,2})?/gi;
+    let m,o=[]; while((m=re.exec(sec))!==null) o.push({vol:m[1].toUpperCase(), t:(m[2]||'').replace(/^T/i,'')});
+    return o;
+  }
+  function tokTypes(sec){
+    // One type per mission. A mission's type appears as a leading line
+    // "Départ"/"Arrivée" (accent may be OCR-corrupted) followed by a continuation
+    // "(Départ…" / "(Arrivée…" / "(Bagage…" / "Bagage standard", or a lone token.
+    const lines=sec.split('\n');
+    const o=[];
+    const head=/^[ \t]*(D.?part|Arriv.?e)[ \t]*$/i;
+    for(let i=0;i<lines.length;i++){
+      const t=lines[i].trim();
+      const hm=t.match(head);
+      if(hm){
+        let j=i+1; while(j<lines.length&&lines[j].trim()==='')j++;
+        const nxt=j<lines.length?lines[j].trim():'';
+        const isBlockHead = /^\(/.test(nxt) || /^(D.?part|Arriv.?e)\b/i.test(nxt) || /^Bagage/i.test(nxt) || /^NCE\b/.test(nxt) || nxt==='';
+        let p=i-1; while(p>=0&&lines[p].trim()==='')p--;
+        const prevHead = p>=0 && /^[ \t]*(D.?part|Arriv.?e)\b/i.test(lines[p].trim());
+        if(isBlockHead && !prevHead){
+          o.push(/arr/i.test(hm[1])?'ARR':'DEP');
+        }
+      }
+    }
+    return o;
+  }
+  // A line "looks like a porter name" if it matches the name shape AND is not a
+  // known non-name capitalised phrase (Client VIP, Flight Class, Note au, etc.).
+  const PORTER_NAME_RE=/^([A-ZÉÈ][a-zà-ÿ]+(?:-[A-ZÉÈ][a-zà-ÿ]+)?\s+[A-ZÉÈ]\.?|[A-ZÉÈ][a-zà-ÿ]+\s+[A-Z]{3,}|[A-ZÉÈ][a-zà-ÿ]+\s+[A-Z])$/;
+  const PORTER_BLOCK_RE=/^(Client\b|Flight\b|Note\b|Contact\b|Tablette\b|Greete?r\b|Chauff|Mission\b|Itin|Powered\b|Terminal\b|Bagage|Standard|Services?\b|VIP\b|LIVE\b|Festival\b|Carlo\b|Monte\b)/i;
+  function looksLikePorter(line){
+    const t=line.trim();
+    if(!PORTER_NAME_RE.test(t)) return false;
+    if(PORTER_BLOCK_RE.test(t)) return false;
+    return true;
+  }
+  function tokPorters(sec){
+    const lines=sec.split('\n');const o=[];
+    const ctxRe=/^(\+?\d|0\d|Greete?r|Tablette|Flight Class|Client|VIP|Chauff|nathan|Nathan|Contact|CXL)/i;
+    for(let i=0;i<lines.length;i++){
+      const t=lines[i].trim();
+      if(looksLikePorter(t)){
+        let j=i+1; while(j<lines.length&&lines[j].trim()==='')j++;
+        if(j<lines.length&&ctxRe.test(lines[j].trim())){
+          const blk=lines.slice(i, Math.min(lines.length,i+4)).join(' ');
+          o.push({name:t, line:i, pos:null, cancelled:/\bCXL\b/i.test(blk)});
+        }
+      }
+    }
+    return o;
+  }
+  function detectClientForRow(sec, ref){
+    const lines=sec.split('\n');
+    for(let i=0;i<lines.length;i++){
+      if(lines[i].includes(ref)){
+        const w=lines.slice(i,Math.min(lines.length,i+10)).join('\n');
+        if(/ACA \(A[ée]roport/.test(w)) return {tok:'ACA'};
+        if(/Monaco Mediax/.test(w)) return {tok:'Monaco'};
+        if(/WELL'COM AIR/.test(w)) return {tok:'WELLCOM'};
+        const br=w.match(/(.+?)\s*\[(20\d{2}-\d{6})\]/); if(br) return {tok:'AGENCY', ref:br[2], name:br[1].trim().split('\n').pop()};
+      }
+    }
+    return {tok:''};
+  }
+  function typeForRankWithCancellations(porters, types, r){
+    const live=[]; porters.forEach((p,i)=>{ if(!p.cancelled) live.push(i); });
+    const pos=live.indexOf(r);
+    if(pos>=0 && pos<types.length) return types[pos];
+    return '';
+  }
+  function inferTypeForRank(sec, r){
+    const re=/N[°o]\s*Vol\s*[A-Za-z0-9]{2,7}/gi;
+    let m,idxs=[]; while((m=re.exec(sec))!==null) idxs.push(m.index);
+    if(r>=idxs.length) return '';
+    const start=idxs[r], end=(r+1<idxs.length)?idxs[r+1]:start+400;
+    const seg=sec.slice(start, Math.min(sec.length,end+200));
+    if(/Arriv.?e/i.test(seg)) return 'ARR';
+    if(/D.?part/i.test(seg)) return 'DEP';
+    return '';
+  }
+  function clientLabelFromTok(c){
+    if(!c) return '';
+    if(c.tok==='ACA') return 'ACA ETIC';
+    if(c.tok==='Monaco') return 'Monaco Mediax';
+    if(c.tok==='WELLCOM') return "WELL'COM AIR";
+    if(c.tok==='AGENCY') return c.name || '';
+    return '';
+  }
 
-    const paxMatches = [...before.matchAll(/\((\d+)\)/g)];
-    const pax = paxMatches.length ? paxMatches[paxMatches.length-1][1] : '';
+  // A cluster is "scrambled" (column-dumped) when two booking refs OR two porter
+  // names appear consecutively with no "N° Vol" line between them. In a clean
+  // cluster, every booking/porter is interleaved with its own flight. This flag
+  // gates off the clean fast-path so dumped rows always go through rank alignment.
+  function scrambledCluster(sec){
+    const lines=sec.split('\n');
+    const ctxRe=/^(\+?\d|0\d|Greete?r|Tablette|Flight Class|Client|VIP|Chauff|nathan|Nathan|Contact|CXL)/i;
+    let flightSincePorter=true, flightSinceBooking=true;
+    for(let i=0;i<lines.length;i++){
+      const t=lines[i].trim();
+      if(/N[°o]\s*Vol/i.test(t)){flightSincePorter=true;flightSinceBooking=true;}
+      // A "Service" mission (chariot/tournage) is legitimately flightless; reset
+      // the flags so it isn't mistaken for a column dump.
+      if(/^Service\b/.test(t)){flightSincePorter=true;flightSinceBooking=true;}
+      const refs=[...t.matchAll(/(\d{4,6}-\d+)\b/g)].map(x=>x[1]).filter(r=>!/^20\d{2}-\d{6}$/.test(r));
+      if(refs.length){
+        if(!flightSinceBooking) return true;
+        flightSinceBooking=false;
+      }
+      if(looksLikePorter(t)){
+        let j=i+1; while(j<lines.length&&lines[j].trim()==='')j++;
+        if(j<lines.length&&ctxRe.test(lines[j].trim())){
+          if(!flightSincePorter) return true;
+          flightSincePorter=false;
+        }
+      }
+    }
+    return false;
+  }
+  const scrambledCache={};
+  function isScrambledAt(pos){
+    const prev=H.filter(h=>h<=pos);
+    const gs=prev.length?prev[prev.length-1]:0;
+    const next=H.find(h=>h>pos);
+    const ge=next!==undefined?next:text.length;
+    const key=gs+'_'+ge;
+    if(key in scrambledCache) return scrambledCache[key];
+    const v=scrambledCluster(text.slice(gs,ge));
+    scrambledCache[key]=v;
+    return v;
+  }
 
-    const greeterMatches = [...before.matchAll(/Greete?r\s*:*\s*([^\n]+)/gi)];
-    const greeteur = greeterMatches.length ? greeterMatches[greeterMatches.length-1][1].trim() : '';
+  // ---- clean fast-path detection (unchanged behaviour) ----
+  const bookingRe = /(\d{4,6}-\d+|20\d{2}-\d{6})/g;
+  const allBookings = [];
+  let bm;
+  while((bm = bookingRe.exec(text)) !== null){
+    const isLive = /^20\d{2}-\d{6}$/.test(bm[1]);
+    let mNum = '';
+    const tail = text.slice(bm.index, bm.index + 30);
+    const mm = tail.match(/M#\s*(\d+)/);
+    if(mm) mNum = mm[1];
+    const around = text.slice(bm.index, bm.index + 90);
+    const tm = around.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    const hhmm = tm ? (tm[1].padStart(2,'0') + ':' + tm[2]) : '';
+    allBookings.push({pos: bm.index, num: mNum ? mNum : bm[1], time: hhmm, live: isLive});
+  }
+  const allFlights = [];
+  let fm;
+  const flightReAll = /N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})[^]*?Terminal\s*(T?\d{1,2})?/gi;
+  while((fm = flightReAll.exec(text)) !== null){
+    allFlights.push({pos: fm.index, vol: fm[1].toUpperCase(), terminal: (fm[2]||'').replace(/^T/i,'')});
+  }
 
-    const mNumMatch = entry.text.match(/M#\s*(\d+)/);
-    const booking = entry.booking + (mNumMatch ? ' M#' + mNumMatch[1] : '');
+  const porterRe = new RegExp(escapeRegex(porterName), 'gi');
+  const mentions = [];
+  let pm;
+  while((pm = porterRe.exec(text)) !== null) mentions.push(pm.index);
+
+  // Pre-compute cluster spans + per-cluster rank resolution cache.
+  const H = clusterSpans();
+  const clusterCache = {};
+  function resolveCluster(gStart, gEnd){
+    const key = gStart+'_'+gEnd;
+    if(clusterCache[key]) return clusterCache[key];
+    const sec = text.slice(gStart, gEnd);
+    const r = {
+      sec,
+      bk: tokBookingRows(sec),
+      cli: tokClients(sec),
+      fl: tokFlights(sec),
+      ty: tokTypes(sec),
+      po: tokPorters(sec)
+    };
+    clusterCache[key] = r;
+    return r;
+  }
+
+  mentions.forEach((pos, mi) => {
+    // nearest preceding booking → block start
+    let nearestBookingPos = -1;
+    for(const b of allBookings){ if(b.pos < pos) nearestBookingPos = b.pos; else break; }
+    const blockStart = nearestBookingPos >= 0 ? nearestBookingPos : (mi > 0 ? mentions[mi-1] : 0);
+
+    const blockBookings = allBookings.filter(b => b.pos >= blockStart && b.pos < pos);
+    const blockFlights = allFlights.filter(f => f.pos >= blockStart && f.pos < pos);
+    const isClean = blockBookings.length === 1 && blockFlights.length === 1
+                    && blockFlights[0].pos > blockBookings[0].pos
+                    && !isScrambledAt(pos);
+
+    // date (nearest date before the porter)
+    const beforeAll = text.slice(blockStart, pos);
+    const dateMatches = beforeAll.match(/(\d{2})\/(\d{2})\/\d{4}/g);
+    let date = todayStr();
+    if(dateMatches){
+      const last = dateMatches[dateMatches.length-1].match(/(\d{2})\/(\d{2})/);
+      date = last[1] + '/' + last[2];
+    }
+    const timeMatch = beforeAll.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    const sortTime = timeMatch ? (parseInt(timeMatch[1])*60 + parseInt(timeMatch[2])) : 9999;
 
     const mission = emptyMission();
-    Object.assign(mission, {booking, date, vol, terminal, type, lieuDepose, client, greeteur, pax});
+    mission.date = date;
+    mission.sortTime = sortTime;
+    mission.prebooking = 'PRÉ-BOOKING';
+
+    // ---- Service mission (chariot/tournage etc.): one booking, no flight ----
+    const blockEndSvc = (() => { for(const bb of allBookings){ if(bb.pos > pos) return bb.pos; } return text.length; })();
+    const svcScope = text.slice(blockStart, Math.min(blockEndSvc, pos + 400));
+    if(blockBookings.length >= 1 && blockFlights.length === 0 && /\bService\b/i.test(svcScope)){
+      const b = blockBookings[0];
+      let client='';
+      const cM = text.slice(blockStart, pos).match(/(Monaco Mediax|ACA \([^)]+\)|[A-Z][A-Za-z'()\.\- ]+?SAS)/);
+      if(cM){ const s=cM[1].trim();
+        client = /Monaco/i.test(s)?'Monaco Mediax' : /^ACA/i.test(s)?'ACA ETIC' : s; }
+      Object.assign(mission, {
+        booking: b.num, type: 'Service', client, greeteur:'',
+        vol:'', terminal:'', lieuDepose:'', bookingOptions:[], flightOptions:[]
+      });
+      found.push(mission);
+      return;
+    }
+
+    if(isClean){
+      // ---- clean row: take its single booking/flight directly ----
+      const b = blockBookings[0], f = blockFlights[0];
+      // search type within the whole block (up to the next booking), since
+      // Parking-Pro / group rows push the Arrivée/Départ token far past pos.
+      let blockEnd = text.length;
+      for(const bb of allBookings){ if(bb.pos > pos){ blockEnd = bb.pos; break; } }
+      const after = text.slice(pos, Math.min(blockEnd, pos + 1500));
+      const before = text.slice(blockStart, pos);
+      let type = '';
+      if(/arriv.?e/i.test(after)) type='ARR';
+      else if(/d.?part/i.test(after)) type='DEP';
+      else if(/arriv.?e/i.test(before)) type='ARR';
+      else if(/d.?part/i.test(before)) type='DEP';
+
+      let client='';
+      const cM = before.match(/(Monaco Mediax|ACA \([^)]+\))(?![^]*(Monaco Mediax|ACA \())/);
+      if(cM) client = /Monaco/i.test(cM[1]) ? 'Monaco Mediax' : 'ACA ETIC';
+
+      const greetScope = text.slice(pos, pos + 120);
+      const gm = greetScope.match(/Greete?r\s*:*\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\- ]*)/i);
+      const greeteur = gm ? gm[1].trim().replace(/\s+\+?\d.*$/, '').trim() : '';
+
+      let lieuDepose = type === 'ARR' ? 'Tapis bagage' : 'AUTO_CHECKIN';
+      if(/D[ée]pose-?\s*minute/i.test(after) || /D[ée]pose-?\s*minute/i.test(before.slice(-200))) lieuDepose='Dépose minute';
+      else if(/Parking\s*Pro/i.test(after) || /Parking\s*Pro/i.test(before.slice(-200))) lieuDepose='Parking pro';
+
+      Object.assign(mission, {
+        booking: b.num, type, client, greeteur,
+        vol: f.vol, terminal: f.terminal,
+        lieuDepose, bookingOptions: [], flightOptions: []
+      });
+      found.push(mission);
+      return;
+    }
+
+    // ---- scrambled: rank alignment inside the cluster ----
+    const prev = H.filter(h => h <= pos);
+    const gStart = prev.length ? prev[prev.length-1] : 0;
+    const next = H.find(h => h > pos);
+    const gEnd = next !== undefined ? next : text.length;
+    const C = resolveCluster(gStart, gEnd);
+
+    // rank = index of THIS mention among the cluster's porters.
+    // Resolve by ORDINAL: the k-th occurrence of porterName among this cluster's
+    // mentions maps to the k-th porter entry bearing porterName. (Position-distance
+    // is unreliable when the same porter appears twice in one cluster.)
+    let rank = -1;
+    {
+      let ordinal = 0;
+      for(const mp of mentions){
+        if(mp >= gStart && mp < gEnd){
+          if(mp === pos) break;
+          ordinal++;
+        }
+      }
+      let seen = 0;
+      for(let idx=0; idx<C.po.length; idx++){
+        if(C.po[idx].name === porterName){
+          if(seen === ordinal){ rank = idx; break; }
+          seen++;
+        }
+      }
+    }
+
+    const N = C.po.length;
+    const coreAligned = (C.bk.length === N && C.fl.length === N && N > 0 && rank >= 0 && rank < N);
+    const clientsAligned = (C.cli.length === N);
+    const typesAligned = (C.ty.length === N);
+
+    if(coreAligned){
+      const row = C.bk[rank];
+      const fl = C.fl[rank];
+      let c = clientsAligned ? C.cli[rank] : detectClientForRow(C.sec, row.ref);
+      // Invariant: M# is only ever on ACA missions.
+      if((!c || !c.tok) && row.m) c = {tok:'ACA'};
+      const isACA = c && c.tok === 'ACA';
+      const booking = isACA ? (row.m || row.ref) : ((c && c.ref) || row.ref);
+      const isLive = false; // planning rows are PRÉ-BOOKING
+
+      let type = typesAligned ? C.ty[rank]
+               : (C.ty.length>0 ? typeForRankWithCancellations(C.po, C.ty, rank) : '');
+      if(!type) type = inferTypeForRank(C.sec, rank);
+
+      // greeter from the porter's own contact block: from the name up to the next
+      // porter name or the next mission's contact start — capped tightly so a
+      // neighbouring row's greeter never bleeds in.
+      let greeteur = '';
+      {
+        const scope = text.slice(pos, pos + 80);
+        const stop = scope.search(/\n[A-ZÉÈ][a-zà-ÿ]+\s+[A-ZÉÈ]\.?\n/);
+        const own = stop > 0 ? scope.slice(0, stop) : scope;
+        const gm = own.match(/Greete?r\s*:*\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
+        if(gm) greeteur = gm[1].trim();
+      }
+
+      let lieuDepose = type === 'ARR' ? 'Tapis bagage' : 'AUTO_CHECKIN';
+      const noteScope = text.slice(pos-150, pos+200);
+      if(/D[ée]pose-?\s*minute/i.test(noteScope)) lieuDepose='Dépose minute';
+      else if(/Parking\s*Pro/i.test(noteScope)) lieuDepose='Parking pro';
+
+      Object.assign(mission, {
+        booking, type,
+        client: clientLabelFromTok(c),
+        greeteur,
+        vol: fl.vol, terminal: fl.t,
+        lieuDepose,
+        bookingOptions: [],   // resolved → no chips
+        flightOptions: []
+      });
+      found.push(mission);
+      return;
+    }
+
+    // ---- gate failed → relaxed (vol+type if they align with porters) + chips ----
+    const relaxed = (C.fl.length === N && C.ty.length === N && rank >= 0 && rank < N);
+    let vol='', term='', type='';
+    if(relaxed){ vol=C.fl[rank].vol; term=C.fl[rank].t; type=C.ty[rank]; }
+
+    // booking chips: unique booking rows in the cluster (with their M#/refs)
+    const bSeen = new Set(); const bookingOptions = [];
+    C.bk.forEach(b => {
+      const num = b.m ? b.m : (b.clientRef || b.ref);
+      if(bSeen.has(num)) return; bSeen.add(num);
+      bookingOptions.push({num, time:'', live:false});
+    });
+    // flight chips: unique flights
+    const fSeen = new Set(); const flightOptions = [];
+    C.fl.forEach(f => { const label=f.vol+' / T'+f.t; if(fSeen.has(label))return; fSeen.add(label); flightOptions.push({label, vol:f.vol, terminal:f.t}); });
+
+    const after = text.slice(pos, pos+220);
+    if(!type){ if(/arriv.?e/i.test(after)) type='ARR'; else if(/d.?part/i.test(after)) type='DEP'; }
+
+    const greetScope = text.slice(pos, pos + 120);
+    const gm = greetScope.match(/Greete?r\s*:*\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
+    const greeteur = gm ? gm[1].trim() : '';
+
+    Object.assign(mission, {
+      booking: relaxed && bookingOptions.length ? '' : (bookingOptions[0] ? bookingOptions[0].num : ''),
+      type,
+      client: '',
+      greeteur,
+      vol, terminal: term,
+      lieuDepose: type === 'ARR' ? 'Tapis bagage' : 'AUTO_CHECKIN',
+      bookingOptions: bookingOptions.length>1 ? bookingOptions : [],
+      flightOptions: (!relaxed && flightOptions.length>1) ? flightOptions : []
+    });
     found.push(mission);
-  }
+  });
+
+  found.sort((a,b) => (a.sortTime||9999) - (b.sortTime||9999));
   return found;
 }
 
+
 function fieldId(idx, name){ return `m${idx}_${name}`; }
+
+function renderCandidates(m, idx){
+  const bOpts = m.bookingOptions || [];
+  const fOpts = m.flightOptions || [];
+  if(bOpts.length <= 1 && fOpts.length <= 1) return '';
+  let html = '<div class="candidates"><div class="clabel">⚠ Plusieurs missions à la même heure ici — touche celle qui te concerne</div>';
+  if(bOpts.length > 1){
+    html += '<div class="csub">1. Ton numéro de booking (avec l\'heure) :</div>';
+    html += '<div class="chips">';
+    html += bOpts.map(b => `<span class="chip ${b.num===m.booking?'active':''}" data-num="${b.num}" data-live="${b.live?'1':'0'}" onclick="pickBooking(${idx}, this)">${b.time ? b.time + ' · ' : ''}${b.num}${b.live?' (LIVE)':''}</span>`).join('');
+    html += '</div>';
+  }
+  if(fOpts.length > 1){
+    html += '<div class="csub">2. Ton vol :</div>';
+    html += '<div class="chips">';
+    html += fOpts.map(f => `<span class="chip ${f.vol===m.vol?'active':''}" data-vol="${f.vol}" data-term="${f.terminal}" onclick="pickFlight(${idx}, this)">${f.label}</span>`).join('');
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function pickBooking(idx, el){
+  document.getElementById(fieldId(idx,'booking')).value = el.getAttribute('data-num');
+  const pb = document.getElementById(fieldId(idx,'prebooking'));
+  if(pb) pb.value = el.getAttribute('data-live') === '1' ? 'LIVE' : 'PRÉ-BOOKING';
+  const titleEl = document.querySelector(`.mission[data-idx="${idx}"] .mission-head strong`);
+  if(titleEl) titleEl.textContent = 'Booking ' + el.getAttribute('data-num');
+  const parent = el.parentNode;
+  parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function pickFlight(idx, el){
+  document.getElementById(fieldId(idx,'vol')).value = el.getAttribute('data-vol');
+  document.getElementById(fieldId(idx,'terminal')).value = el.getAttribute('data-term');
+  const parent = el.parentNode;
+  parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
 
 function renderMission(m, idx){
   const total = (parseInt(m.bagStandard)||0) + (parseInt(m.bagHorsFormat)||0) + (parseInt(m.bagCage)||0);
@@ -416,6 +881,7 @@ function renderMission(m, idx){
       </div>
     </div>
     <div class="mission-body">
+      ${renderCandidates(m, idx)}
       <div class="grid">
         <div class="field"><label>Booking #</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
         <div class="field"><label>Date</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
@@ -424,7 +890,7 @@ function renderMission(m, idx){
         <div class="field">
           <label>Pré-booking / Live</label>
           <select id="${fieldId(idx,'prebooking')}">
-            <option ${m.prebooking==='PRE BOOKING'?'selected':''}>PRE BOOKING</option>
+            <option ${m.prebooking==='PRÉ-BOOKING'?'selected':''}>PRÉ-BOOKING</option>
             <option ${m.prebooking==='LIVE'?'selected':''}>LIVE</option>
           </select>
         </div>
@@ -442,8 +908,16 @@ function renderMission(m, idx){
 
       <div class="grid">
         <div class="field"><label>Bagages standard</label><input id="${fieldId(idx,'bagStandard')}" value="${m.bagStandard}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
-        <div class="field"><label>Hors format</label><input id="${fieldId(idx,'bagHorsFormat')}" value="${m.bagHorsFormat}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
-        <div class="field full"><label>Cage animal</label><input id="${fieldId(idx,'bagCage')}" value="${m.bagCage}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+        <div class="field"><label>Hors format</label>
+          <select id="${fieldId(idx,'bagHorsFormat')}" onchange="updateTotal(${idx})">
+            ${['0','1','2','3','4','5','N/A'].map(v=>`<option ${m.bagHorsFormat==v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field full"><label>Cage animal</label>
+          <select id="${fieldId(idx,'bagCage')}" onchange="updateTotal(${idx})">
+            ${['0','1','2','N/A'].map(v=>`<option ${m.bagCage==v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </div>
       </div>
       <div class="total-row">
         <span>Total bagages pris en charge</span>
@@ -471,6 +945,9 @@ function renderMission(m, idx){
             <option ${m.lieuRencontre==='Tapis bagage'?'selected':''}>Tapis bagage</option>
             <option ${m.lieuRencontre==='Parking pro'?'selected':''}>Parking pro</option>
             <option ${m.lieuRencontre==='Linéaire Professionnel'?'selected':''}>Linéaire Professionnel</option>
+            <option ${m.lieuRencontre==='Gare routière (BUS)'?'selected':''}>Gare routière (BUS)</option>
+            <option ${m.lieuRencontre==='Loueurs'?'selected':''}>Loueurs</option>
+            <option ${m.lieuRencontre==='Vol privé'?'selected':''}>Vol privé</option>
             <option value="Autre" ${m.lieuRencontre==='Autre'?'selected':''}>Autre...</option>
           </select>
           <input class="autre-input" id="${fieldId(idx,'lieuRencontreAutre')}" placeholder="Précise le lieu" value="${m.lieuRencontreAutre||''}" style="display:${m.lieuRencontre==='Autre'?'block':'none'}">
@@ -483,6 +960,9 @@ function renderMission(m, idx){
             <option ${m.lieuDepose==='Dépose minute'?'selected':''}>Dépose minute</option>
             <option ${m.lieuDepose==='Tapis bagage'?'selected':''}>Tapis bagage</option>
             <option ${m.lieuDepose==='Parking pro'?'selected':''}>Parking pro</option>
+            <option ${m.lieuDepose==='Gare routière (BUS)'?'selected':''}>Gare routière (BUS)</option>
+            <option ${m.lieuDepose==='Loueurs'?'selected':''}>Loueurs</option>
+            <option ${m.lieuDepose==='Vol privé'?'selected':''}>Vol privé</option>
             <option value="Autre" ${m.lieuDepose==='Autre'?'selected':''}>Autre...</option>
           </select>
           <input class="autre-input" id="${fieldId(idx,'lieuDeposeAutre')}" placeholder="Précise le lieu" value="${m.lieuDeposeAutre||''}" style="display:${m.lieuDepose==='Autre'?'block':'none'}">
@@ -498,6 +978,7 @@ function renderMission(m, idx){
             <option ${m.satisfaction==='Bonne'?'selected':''}>Bonne</option>
             <option ${m.satisfaction==='Moyenne'?'selected':''}>Moyenne</option>
             <option ${m.satisfaction==='Mauvaise'?'selected':''}>Mauvaise</option>
+          </select>
           </select>
         </div>
       </div>
@@ -555,8 +1036,10 @@ function toggleAutre(idx, field){
 
 function updateTotal(idx){
   const s = parseInt(document.getElementById(fieldId(idx,'bagStandard')).value)||0;
-  const h = parseInt(document.getElementById(fieldId(idx,'bagHorsFormat')).value)||0;
-  const c = parseInt(document.getElementById(fieldId(idx,'bagCage')).value)||0;
+  const hv = document.getElementById(fieldId(idx,'bagHorsFormat')).value;
+  const cv = document.getElementById(fieldId(idx,'bagCage')).value;
+  const h = hv==='N/A' ? 0 : (parseInt(hv)||0);
+  const c = cv==='N/A' ? 0 : (parseInt(cv)||0);
   document.getElementById(fieldId(idx,'total')).textContent = s+h+c;
 }
 
@@ -578,17 +1061,18 @@ function resolveLieu(idx, field){
 }
 
 function generateReport(idx){
-  const total = (parseInt(val(idx,'bagStandard'))||0) + (parseInt(val(idx,'bagHorsFormat'))||0) + (parseInt(val(idx,'bagCage'))||0);
+  const _hf = val(idx,'bagHorsFormat'); const _ca = val(idx,'bagCage');
+  const total = (parseInt(val(idx,'bagStandard'))||0) + (_hf==='N/A'?0:(parseInt(_hf)||0)) + (_ca==='N/A'?0:(parseInt(_ca)||0));
   const lieuRencontre = resolveLieu(idx,'lieuRencontre');
   const lieuDepose = resolveLieu(idx,'lieuDepose');
   const greeteur = val(idx,'greeteur');
-  const greeteurLine = greeteur ? `\nGreeteur : ${greeteur}` : '';
+  const clientLine = greeteur ? `${val(idx,'client')} - Greeteur : ${greeteur}` : val(idx,'client');
 
   const report =
 `1. Informations générales
 Booking # : ${val(idx,'booking')}
 Date : ${val(idx,'date')}
-Client : ${val(idx,'client')}${greeteurLine}
+Client : ${clientLine}
 Pré-booking ou Live : ${val(idx,'prebooking')}
 Type de service : ${val(idx,'type')}
 Vol - code IATA : ${val(idx,'vol')}
@@ -675,6 +1159,61 @@ document.getElementById('extractBtn').addEventListener('click', () => {
 });
 
 render();
+
+// ── PDF IMPORT ──────────────────────────────────────────────────────────────
+(function(){
+  const input = document.getElementById('pdfInput');
+  const status = document.getElementById('pdfStatus');
+  if(!input) return;
+
+  input.addEventListener('change', async function(){
+    const file = this.files[0];
+    if(!file) return;
+    status.style.display = 'block';
+    status.style.color = '';
+    status.textContent = '⏳ Lecture du PDF…';
+
+    try {
+      if(typeof pdfjsLib === 'undefined') throw new Error('pdf.js non chargé — vérifie ta connexion.');
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+      let fullText = '';
+
+      for(let p = 1; p <= pdf.numPages; p++){
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        // Group items by Y (rounded 3pt tolerance), sort X within each row
+        const rows = new Map();
+        for(const item of content.items){
+          const x = item.transform[4];
+          const y = Math.round(item.transform[5] / 3) * 3;
+          if(!rows.has(y)) rows.set(y, []);
+          rows.get(y).push({x, text: item.str});
+        }
+        // PDF Y is bottom-up → sort descending = top-to-bottom
+        const sorted = [...rows.entries()].sort((a,b) => b[0] - a[0]);
+        for(const [, items] of sorted){
+          items.sort((a,b) => a.x - b.x);
+          const line = items.map(i => i.text).join(' ').trim();
+          if(line) fullText += line + '\n';
+        }
+        fullText += '\n';
+      }
+
+      document.getElementById('planningInput').value = fullText;
+      status.textContent = `✅ PDF chargé (${pdf.numPages} page${pdf.numPages>1?'s':''}) — extraction en cours…`;
+      status.style.color = '#27ae60';
+      document.getElementById('extractBtn').click();
+    } catch(e) {
+      status.textContent = '❌ Erreur : ' + e.message;
+      status.style.color = '#c0392b';
+    }
+    this.value = '';
+  });
+})();
 </script>
 
 </body>
