@@ -273,23 +273,29 @@
       <label>Nom du porteur</label>
       <select id="porterSelect" onchange="togglePorterCustom()">
         <option>Damien P.</option>
+        <option>Adam E</option>
         <option>Antoine D.</option>
         <option>Bastien D</option>
         <option>Bounmy S</option>
+        <option>Brandon L.</option>
         <option>David AZIB</option>
         <option>Denis L.</option>
         <option>Eddy PLASZOWSKI</option>
         <option>Fabien T.</option>
         <option>Falco P.</option>
         <option>François L.</option>
+        <option>Gabriel K</option>
         <option>Ghassan S.</option>
         <option>Ibragim C.</option>
         <option>Jacob T.</option>
         <option>Jean-François M.</option>
         <option>Kaïs RAHALI</option>
+        <option>Maxime B</option>
+        <option>Nathan D</option>
         <option>Paul PASTISSON</option>
         <option>Pierre R.</option>
         <option>Ryan R.</option>
+        <option>Stéphane M.</option>
         <option>Terry D.</option>
         <option>Thomas C.</option>
         <option>Yanis P.</option>
@@ -312,14 +318,45 @@
     <div id="pdfStatus" class="hint" style="display:none"></div>
     <div class="orsep">— ou colle le texte —</div>
     <textarea id="planningInput" placeholder="Colle ici le texte du planning..."></textarea>
-    <button class="btn" id="extractBtn">Extraire les missions de ce porteur</button>
-    <div class="hint">Le PDF est lu directement sur ton téléphone (rien n'est envoyé en ligne) et évite les pages mélangées. Le copier-coller reste possible. Tous les champs restent modifiables.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn" id="extractBtn" style="flex:1 1 100%">Extraire les missions de ce porteur</button>
+      <button class="btn full-ghost" onclick="clearPlanningInput()" style="flex:1 1 0">Vider le copier-coller</button>
+      <button class="btn full-ghost" onclick="undoMissions()" id="undoBtn" style="flex:1 1 0" disabled>↩ Annuler</button>
+    </div>
+    <button class="btn full-ghost" onclick="clearState()" style="margin-top:6px">Effacer la session enregistrée</button>
+    <div class="hint">Tes données (porteur, planning, missions) sont enregistrées sur ce téléphone et restaurées si la page se recharge. Elles s'effacent automatiquement le lendemain. Le PDF est lu localement, rien n'est envoyé en ligne.</div>
   </div>
 
   <div id="missionsContainer"></div>
 </main>
 
+<datalist id="greetersList">
+  <option value="ANAS"></option>
+  <option value="Anissa"></option>
+  <option value="AXELLE"></option>
+  <option value="BRYAN"></option>
+  <option value="DANY"></option>
+  <option value="Gemma"></option>
+  <option value="Jean-François"></option>
+  <option value="JOHANA"></option>
+  <option value="Joao"></option>
+  <option value="Leena"></option>
+  <option value="Linda.K"></option>
+  <option value="Linda.Z"></option>
+  <option value="LOLA"></option>
+  <option value="Louane"></option>
+  <option value="MAELANE"></option>
+  <option value="Marine"></option>
+  <option value="MYRIAM"></option>
+  <option value="Roxane"></option>
+  <option value="Sacha"></option>
+  <option value="STEPHANIE"></option>
+  <option value="Theo"></option>
+  <option value="ZOUBEIDA"></option>
+</datalist>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="parser.js"></script>
 
 <script>
 let defaults = {
@@ -364,6 +401,20 @@ function saveDefaults(d){
   defaults = Object.assign({}, defaults, d);
 }
 
+// Meeting/drop-off defaults by mission type. Arrival: meet at the baggage belt,
+// drop at the pro parking. Departure: meet at dépose-minute, drop at check-in.
+// Applied once at extraction; Service missions keep their own (empty) places.
+function applyLieuDefaults(m){
+  if(m.type === 'ARR'){
+    m.lieuRencontre = 'Tapis bagage';
+    m.lieuDepose = 'Parking pro';
+  } else if(m.type === 'DEP'){
+    m.lieuRencontre = 'Dépose minute';
+    m.lieuDepose = 'AUTO_CHECKIN';
+  }
+  return m;
+}
+
 function escapeRegex(s){
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -388,7 +439,140 @@ function getPorterName(){
   return sel.value;
 }
 
+// ---- Référentiels auto-alimentés (porteurs + greeters) ----------------------
+// La liste de base reste dans le HTML. Tout planning chargé/collé en extrait les
+// porteurs et greeters et les ajoute en local : un nouveau collègue ou greeter
+// apparaît automatiquement au collage suivant, sans redéploiement.
+function escHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function rosterLoad(key){ try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; } }
+function rosterMerge(key, names){
+  const cur = new Set(rosterLoad(key));
+  let changed = false;
+  names.forEach(n=>{ if(n && !cur.has(n)){ cur.add(n); changed = true; } });
+  if(changed) localStorage.setItem(key, JSON.stringify([...cur]));
+  return changed;
+}
+const PORTER_HARVEST_RE = /^([A-ZÉÈ][a-zà-ÿ]+(?:-[A-ZÉÈ][a-zà-ÿ]+)?\s+[A-ZÉÈ]\.?|[A-ZÉÈ][a-zà-ÿ]+\s+[A-Z]{1,}\.?)$/;
+const PORTER_HARVEST_BLOCK = /^(Flight|Greete?r|Note|Phone|Aviation|Class|Contact|Terminal|D[ée]pose|Arriv|D[ée]part|Mission|Date|Client|Itin|V[ée]hic|Service|Powered|Aéroport|Parking|Bagage)/i;
+function harvestRoster(text){
+  if(!text) return;
+  const porters = new Set(), greeters = new Set();
+  for(const raw of text.split('\n')){
+    const t = raw.trim();
+    const g = t.match(/greete?r[\s:]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
+    if(g){ const n = g[1].trim(); if(['a','à','venir','voir'].indexOf(n.toLowerCase()) === -1) greeters.add(n); }
+    const c = t.replace(/^NCE\s+/, '').replace(/\s*\+?\d.*$/, '').trim();
+    if(PORTER_HARVEST_RE.test(c) && !PORTER_HARVEST_BLOCK.test(c)) porters.add(c);
+  }
+  const ch = rosterMerge('customPorters', porters) | rosterMerge('customGreeters', greeters);
+  if(ch) refreshRosterUI();
+}
+function refreshRosterUI(){
+  const sel = document.getElementById('porterSelect');
+  if(!window._basePorters) window._basePorters = [...sel.options].filter(o=>o.value!=='custom').map(o=>o.textContent);
+  const dl = document.getElementById('greetersList');
+  if(!window._baseGreeters) window._baseGreeters = [...dl.options].map(o=>o.value);
+
+  const prev = sel.value;
+  const customs = rosterLoad('customPorters').filter(n=>!window._basePorters.includes(n)).sort((a,b)=>a.localeCompare(b,'fr'));
+  const merged = window._basePorters.concat(customs);
+  sel.innerHTML = merged.map(n=>`<option>${escHtml(n)}</option>`).join('') + '<option value="custom">Autre...</option>';
+  if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+
+  const gc = rosterLoad('customGreeters').filter(n=>!window._baseGreeters.includes(n));
+  const gall = window._baseGreeters.concat(gc).sort((a,b)=>a.localeCompare(b,'fr'));
+  dl.innerHTML = gall.map(g=>`<option value="${escHtml(g)}"></option>`).join('');
+}
+
+function isPdfjsSerialization(text){
+  const lines=text.split('\n'); let mixed=0;
+  for(const l of lines){
+    if(/\d{4,6}-\d+/.test(l) && /(ACA \(|Monaco Mediax|WELL'COM)/.test(l) && /\+?\d{2}\s?\d/.test(l)) mixed++;
+    if(mixed>=3) return true;
+  }
+  return false;
+}
+
+function extractMissionsPdfjs(text, porterName){
+  const lines=text.split('\n');
+  const NAME_TOKEN=/(^|\s)([A-ZÉÈ][a-zà-ÿ]+(?:-[A-ZÉÈ][a-zà-ÿ]+)?\s+[A-ZÉÈ]\.|[A-ZÉÈ][a-zà-ÿ]+\s+[A-Z]{3,}|[A-ZÉÈ][a-zà-ÿ]+\s+[A-Z])(\s|$)/g;
+  const BLOCK=/^(Client|Flight|Note|Contact|Tablette|Greete?r|Chauff|Mission|Itin|Powered|Terminal|Bagage|Standard|Service|VIP|LIVE|Festival|Carlo|Monte|Aéroport)\b/;
+  const CITY=/\b(Nice|Paris|London|Dubai|Newark|Boston|Atlanta|Zurich|Istanbul|Dulles|Doha|Naples|Amsterdam|Rome|Lille|Brussels|Sofia|Frankfurt|Philadelphia|Montreal|Tel|Aviv|Chisinau|Budapest)\b/;
+  function anchorLines(){
+    const a=[];
+    for(let i=0;i<lines.length;i++){ let m; NAME_TOKEN.lastIndex=0;
+      while((m=NAME_TOKEN.exec(lines[i]))!==null){ const n=m[2].trim();
+        if(BLOCK.test(n)||CITY.test(n)) continue; a.push(i); break; } }
+    return a;
+  }
+  function nameOnLine(line){
+    const esc=porterName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    return new RegExp('(^|\\s)'+esc+'(\\s|$)').test(line);
+  }
+  const anchors=anchorLines();
+  const out=[];
+  for(let i=0;i<lines.length;i++){
+    if(!nameOnLine(lines[i])) continue;
+    let prev=-1,next=lines.length;
+    for(const a of anchors){ if(a<i) prev=a; if(a>i){ next=a; break; } }
+    const lo=Math.max(0, Math.max(prev+1, i-3));
+    const hi=Math.min(lines.length, Math.max(next, i+3));
+    const W=lines.slice(lo,hi).join('\n');
+
+    let clientTok='',mnum='',clientRef='',booking='';
+    let bestB=null,bd=1e9;
+    lines.slice(lo,hi).forEach((l,k)=>{const m=l.match(/\b(\d{4,6}-\d+)\b/);if(m&&!/^20\d{2}-\d{6}$/.test(m[1])){const d=Math.abs((lo+k)-i);if(d<bd){bd=d;bestB={ref:m[1],line:lo+k};}}});
+    if(bestB){booking=bestB.ref;const bl=lines[bestB.line];
+      if(/ACA \(/.test(bl))clientTok='ACA';else if(/Monaco/.test(bl))clientTok='Monaco';else if(/WELL'COM/.test(bl))clientTok='WELLCOM';}
+    const mM=W.match(/M#\s*(\d+)/);if(mM)mnum=mM[1];
+    const crM=W.match(/\[(20\d{2}-\d{6})\]/);if(crM){clientRef=crM[1];if(!clientTok)clientTok='AGENCY';}
+    let vol='',term='';
+    const vM=W.match(/N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})\b/i);
+    if(vM){vol=vM[1].toUpperCase();
+      const afterVol=W.slice(W.indexOf(vM[0]));
+      const tail=afterVol.replace(/^.*?Terminal\s*/,'');
+      let tm=afterVol.match(/Terminal\s*(T?\d{1,2}|[A-Z](?=\s))\b/);
+      if(!tm) tm=afterVol.match(/Terminal\s*\n[^\n]*?\b(\d{1,2}|[A-Z])\s+[A-Z]/);
+      if(!tm) tm=afterVol.match(/\b(\d{1,2})\s+[A-Z][a-z]/);
+      if(tm) term=tm[1].replace(/^T/i,'');
+      if(/^(Naples|Sofia|Chisinau)\b/.test(tail) && !/^\d/.test(term)) term='';
+    }
+    let type=''; if(/Arriv/i.test(W))type='ARR';else if(/D.?part/i.test(W))type='DEP';
+    let greeter=''; const g=W.match(/Greete?r\s*:*\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);if(g)greeter=g[1].trim();
+    const isACA=clientTok==='ACA'||(!clientTok&&mnum);
+    const finalBooking=isACA?(mnum||booking):(clientRef||booking);
+
+    const m=emptyMission();
+    m.prebooking='PRÉ-BOOKING';
+    const dm=W.match(/(\d{2})\/(\d{2})\/\d{4}/);
+    m.date = dm ? dm[1]+'/'+dm[2] : todayStr();
+    m.booking=finalBooking; m.vol=vol; m.terminal=term; m.type=type;
+    m.client=isACA?'ACA ETIC':clientTok==='Monaco'?'Monaco Mediax':clientTok==='WELLCOM'?"WELL'COM AIR":'';
+    m.greeteur=greeter;
+    m.lieuDepose = type==='ARR' ? 'Tapis bagage' : 'AUTO_CHECKIN';
+    if(/D[ée]pose-?\s*minute/i.test(W)) m.lieuDepose='Dépose minute';
+    else if(/Parking\s*Pro/i.test(W)) m.lieuDepose='Parking pro';
+    m.bookingOptions=[]; m.flightOptions=[];
+    out.push(m);
+  }
+  const seen=new Set(); const dedup=[];
+  for(const mm of out){ const k=(mm.booking||'')+'|'+(mm.vol||''); if(seen.has(k))continue; seen.add(k); dedup.push(mm); }
+  return dedup;
+}
+
 function extractMissions(text, porterName){
+  let r;
+  if(isPdfjsSerialization(text)){
+    r = extractMissionsPdfjs(text, porterName);
+    if(!r.length) r = extractMissionsCopyPaste(text, porterName);
+  } else {
+    r = extractMissionsCopyPaste(text, porterName);
+  }
+  r.forEach(applyLieuDefaults);
+  return r;
+}
+
+function extractMissionsCopyPaste(text, porterName){
   // ---------------------------------------------------------------------------
   // Two serialisations exist:
   //  (1) "copier-coller" : columns are dumped per sub-section inside a cluster
@@ -449,7 +633,7 @@ function extractMissions(text, porterName){
     return o;
   }
   function tokFlights(sec){
-    const re=/N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})[^]*?Terminal\s*(T?\d{1,2})?/gi;
+    const re=/N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})[^]*?Terminal\s*(T?\d{1,2}|[A-Z](?=\s))?/gi;
     let m,o=[]; while((m=re.exec(sec))!==null) o.push({vol:m[1].toUpperCase(), t:(m[2]||'').replace(/^T/i,'')});
     return o;
   }
@@ -538,6 +722,22 @@ function extractMissions(text, porterName){
     if(c.tok==='AGENCY') return c.name || '';
     return '';
   }
+  // Greeter from the porter's contact block (scope starts at the porter name).
+  // First a labelled "Greeter: X"; failing that an unlabelled "NAME +phone"
+  // line (some plannings drop the label), bounded by the next porter name so a
+  // neighbour's contact never bleeds in.
+  function greeterFromScope(s){
+    const lab = s.match(/greete?r[\s:]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
+    if(lab){ const g = lab[1].trim(); if(['a','à','venir','voir'].indexOf(g.toLowerCase())===-1) return g; }
+    const lines = s.split('\n');
+    for(let i=1;i<lines.length;i++){
+      const t = lines[i].trim();
+      if(looksLikePorter(t)) break;
+      const gm = t.match(/^([A-ZÀ-Ý][A-Za-zÀ-ÿ.\-]+)\s+\+?\d/);
+      if(gm && !/^(Phone|Flight|Note|Chauff|Greete?r|NCE|Terminal|Aviation)$/i.test(gm[1])) return gm[1];
+    }
+    return '';
+  }
 
   // A cluster is "scrambled" (column-dumped) when two booking refs OR two porter
   // names appear consecutively with no "N° Vol" line between them. In a clean
@@ -598,7 +798,7 @@ function extractMissions(text, porterName){
   }
   const allFlights = [];
   let fm;
-  const flightReAll = /N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})[^]*?Terminal\s*(T?\d{1,2})?/gi;
+  const flightReAll = /N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})[^]*?Terminal\s*(T?\d{1,2}|[A-Z](?=\s))?/gi;
   while((fm = flightReAll.exec(text)) !== null){
     allFlights.push({pos: fm.index, vol: fm[1].toUpperCase(), terminal: (fm[2]||'').replace(/^T/i,'')});
   }
@@ -635,9 +835,29 @@ function extractMissions(text, porterName){
 
     const blockBookings = allBookings.filter(b => b.pos >= blockStart && b.pos < pos);
     const blockFlights = allFlights.filter(f => f.pos >= blockStart && f.pos < pos);
-    const isClean = blockBookings.length === 1 && blockFlights.length === 1
-                    && blockFlights[0].pos > blockBookings[0].pos
-                    && !isScrambledAt(pos);
+
+    let scopeEnd = text.length;
+    for(const bb of allBookings){ if(bb.pos > blockStart){ scopeEnd = bb.pos; break; } }
+    const scopeBookings = allBookings.filter(b => b.pos >= blockStart && b.pos < scopeEnd);
+    const scopeFlights = allFlights.filter(f => f.pos >= blockStart && f.pos < scopeEnd);
+    const distinctFlights = [];
+    const _seenFl = new Set();
+    for(const f of scopeFlights){ const k = f.vol + '/' + f.terminal; if(_seenFl.has(k)) continue; _seenFl.add(k); distinctFlights.push(f); }
+
+    // A clean row requires the porter's own booking to be the one immediately
+    // preceding it. If ANOTHER porter name sits between the candidate booking
+    // and this porter, the booking belongs to that other porter (the copy-paste
+    // dump detached this porter's name from its real ref) → not clean → chips.
+    const _selfPorter = porterName.replace(/\.$/, '');
+    let otherPorterBetween = false;
+    for(const ln of text.slice(blockStart, pos).split('\n')){
+      const t = ln.trim();
+      if(looksLikePorter(t) && t.replace(/\.$/, '') !== _selfPorter){ otherPorterBetween = true; break; }
+    }
+
+    const isClean = scopeBookings.length === 1 && distinctFlights.length === 1
+                    && distinctFlights[0].pos > blockStart
+                    && !otherPorterBetween;
 
     // date (nearest date before the porter)
     const beforeAll = text.slice(blockStart, pos);
@@ -647,12 +867,27 @@ function extractMissions(text, porterName){
       const last = dateMatches[dateMatches.length-1].match(/(\d{2})\/(\d{2})/);
       date = last[1] + '/' + last[2];
     }
+    // heure : la première du bloc (comportement d'origine) ; si absente
+    // (mission ACA sans ligne d'heure propre), on prend la plus proche du nom.
     const timeMatch = beforeAll.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-    const sortTime = timeMatch ? (parseInt(timeMatch[1])*60 + parseInt(timeMatch[2])) : 9999;
+    let sortTime;
+    if(timeMatch){
+      sortTime = parseInt(timeMatch[1])*60 + parseInt(timeMatch[2]);
+    } else {
+      const loW = Math.max(0, pos-900), hiW = Math.min(text.length, pos+120);
+      const seg = text.slice(loW, hiW);
+      let best=null, bestD=1e9, re=/\b([01]?\d|2[0-3]):([0-5]\d)\b/g, mm;
+      while((mm=re.exec(seg))!==null){
+        const at = loW + mm.index, d = Math.abs(at - pos);
+        if(d < bestD){ bestD=d; best=parseInt(mm[1])*60+parseInt(mm[2]); }
+      }
+      sortTime = best === null ? 9999 : best;
+    }
 
     const mission = emptyMission();
     mission.date = date;
     mission.sortTime = sortTime;
+    mission.srcPos = pos;
     mission.prebooking = 'PRÉ-BOOKING';
 
     // ---- Service mission (chariot/tournage etc.): one booking, no flight ----
@@ -674,7 +909,7 @@ function extractMissions(text, porterName){
 
     if(isClean){
       // ---- clean row: take its single booking/flight directly ----
-      const b = blockBookings[0], f = blockFlights[0];
+      const b = scopeBookings[0], f = distinctFlights[0];
       // search type within the whole block (up to the next booking), since
       // Parking-Pro / group rows push the Arrivée/Départ token far past pos.
       let blockEnd = text.length;
@@ -691,9 +926,7 @@ function extractMissions(text, porterName){
       const cM = before.match(/(Monaco Mediax|ACA \([^)]+\))(?![^]*(Monaco Mediax|ACA \())/);
       if(cM) client = /Monaco/i.test(cM[1]) ? 'Monaco Mediax' : 'ACA ETIC';
 
-      const greetScope = text.slice(pos, pos + 120);
-      const gm = greetScope.match(/Greete?r\s*:*\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\- ]*)/i);
-      const greeteur = gm ? gm[1].trim().replace(/\s+\+?\d.*$/, '').trim() : '';
+      const greeteur = greeterFromScope(text.slice(pos, pos + 160));
 
       let lieuDepose = type === 'ARR' ? 'Tapis bagage' : 'AUTO_CHECKIN';
       if(/D[ée]pose-?\s*minute/i.test(after) || /D[ée]pose-?\s*minute/i.test(before.slice(-200))) lieuDepose='Dépose minute';
@@ -756,17 +989,7 @@ function extractMissions(text, porterName){
                : (C.ty.length>0 ? typeForRankWithCancellations(C.po, C.ty, rank) : '');
       if(!type) type = inferTypeForRank(C.sec, rank);
 
-      // greeter from the porter's own contact block: from the name up to the next
-      // porter name or the next mission's contact start — capped tightly so a
-      // neighbouring row's greeter never bleeds in.
-      let greeteur = '';
-      {
-        const scope = text.slice(pos, pos + 80);
-        const stop = scope.search(/\n[A-ZÉÈ][a-zà-ÿ]+\s+[A-ZÉÈ]\.?\n/);
-        const own = stop > 0 ? scope.slice(0, stop) : scope;
-        const gm = own.match(/Greete?r\s*:*\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
-        if(gm) greeteur = gm[1].trim();
-      }
+      const greeteur = greeterFromScope(text.slice(pos, pos + 160));
 
       let lieuDepose = type === 'ARR' ? 'Tapis bagage' : 'AUTO_CHECKIN';
       const noteScope = text.slice(pos-150, pos+200);
@@ -805,9 +1028,7 @@ function extractMissions(text, porterName){
     const after = text.slice(pos, pos+220);
     if(!type){ if(/arriv.?e/i.test(after)) type='ARR'; else if(/d.?part/i.test(after)) type='DEP'; }
 
-    const greetScope = text.slice(pos, pos + 120);
-    const gm = greetScope.match(/Greete?r\s*:*\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
-    const greeteur = gm ? gm[1].trim() : '';
+    const greeteur = greeterFromScope(text.slice(pos, pos + 160));
 
     Object.assign(mission, {
       booking: relaxed && bookingOptions.length ? '' : (bookingOptions[0] ? bookingOptions[0].num : ''),
@@ -822,7 +1043,11 @@ function extractMissions(text, porterName){
     found.push(mission);
   });
 
-  found.sort((a,b) => (a.sortTime||9999) - (b.sortTime||9999));
+  found.sort((a,b) => {
+    const ta=a.sortTime||9999, tb=b.sortTime||9999;
+    if(ta!==tb) return ta-tb;
+    return (a.srcPos||0) - (b.srcPos||0);
+  });
   return found;
 }
 
@@ -886,7 +1111,7 @@ function renderMission(m, idx){
         <div class="field"><label>Booking #</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
         <div class="field"><label>Date</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
         <div class="field full"><label>Client</label><input id="${fieldId(idx,'client')}" value="${m.client}"></div>
-        <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" value="${m.greeteur}" placeholder="ex: Linda.K"></div>
+        <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="ex: Linda.K"></div>
         <div class="field">
           <label>Pré-booking / Live</label>
           <select id="${fieldId(idx,'prebooking')}">
@@ -1016,16 +1241,89 @@ function syncAll(){
   });
 }
 
-function addManualMission(){
-  syncAll();
-  missions.push(emptyMission());
+// ── SAUVEGARDE LOCALE (sur le téléphone, rien n'est envoyé en ligne) ─────────
+// Restaure automatiquement le porteur, le texte collé et les missions au
+// rechargement. Les données d'un autre jour sont purgées automatiquement.
+const STORE_KEY = 'rapports_missions_state_v1';
+function todayKey(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function saveState(){
+  try{
+    syncAll();
+    const sel = document.getElementById('porterSelect');
+    const state = {
+      day: todayKey(),
+      porterSelect: sel ? sel.value : '',
+      porterCustom: (document.getElementById('porterCustom')||{}).value || '',
+      planning: (document.getElementById('planningInput')||{}).value || '',
+      missions: missions
+    };
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  }catch(e){ /* stockage indisponible : on continue sans planter */ }
+}
+function restoreState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return false;
+    const state = JSON.parse(raw);
+    // purge si les données ne sont pas d'aujourd'hui
+    if(!state || state.day !== todayKey()){ localStorage.removeItem(STORE_KEY); return false; }
+    const sel = document.getElementById('porterSelect');
+    if(sel && state.porterSelect){ sel.value = state.porterSelect; togglePorterCustom(); }
+    if(state.porterCustom){ const pc=document.getElementById('porterCustom'); if(pc) pc.value = state.porterCustom; }
+    if(state.planning){ const pi=document.getElementById('planningInput'); if(pi) pi.value = state.planning; }
+    if(Array.isArray(state.missions) && state.missions.length){
+      missions = state.missions;
+      render();
+      return true;
+    }
+  }catch(e){ /* JSON corrompu : on ignore */ }
+  return false;
+}
+function clearState(){
+  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+  missions = [];
+  const pi=document.getElementById('planningInput'); if(pi) pi.value='';
   render();
 }
 
+// ── Annuler (retour en arrière) & vider le copier-coller ─────────────────────
+let undoStack = [];
+function pushUndo(){
+  try{ syncAll(); }catch(e){}
+  undoStack.push(JSON.stringify(missions));
+  if(undoStack.length > 20) undoStack.shift();
+  const b=document.getElementById('undoBtn'); if(b) b.disabled = undoStack.length===0;
+}
+function undoMissions(){
+  if(!undoStack.length) return;
+  const prev = undoStack.pop();
+  try{ missions = JSON.parse(prev); }catch(e){ missions = []; }
+  const b=document.getElementById('undoBtn'); if(b) b.disabled = undoStack.length===0;
+  render();
+  saveState();
+}
+function clearPlanningInput(){
+  const pi=document.getElementById('planningInput'); if(pi) pi.value='';
+  saveState();
+}
+
+function addManualMission(){
+  pushUndo();
+  syncAll();
+  missions.push(emptyMission());
+  render();
+  saveState();
+}
+
 function removeMission(idx){
+  pushUndo();
   syncAll();
   missions.splice(idx,1);
   render();
+  saveState();
 }
 
 function toggleAutre(idx, field){
@@ -1145,7 +1443,9 @@ document.getElementById('extractBtn').addEventListener('click', () => {
     alert('Indique un nom de porteur.');
     return;
   }
+  if(missions.length) pushUndo();
   const text = document.getElementById('planningInput').value;
+  harvestRoster(text);
   const extracted = extractMissions(text, porter);
   if(extracted.length === 0){
     missions = [];
@@ -1156,9 +1456,21 @@ document.getElementById('extractBtn').addEventListener('click', () => {
   }
   missions = extracted;
   render();
+  saveState();
 });
 
 render();
+
+// Restaure la session du jour, puis sauvegarde à chaque modification.
+restoreState();
+refreshRosterUI();
+let _saveTimer=null;
+function saveStateDebounced(){ clearTimeout(_saveTimer); _saveTimer=setTimeout(saveState, 600); }
+document.addEventListener('input', (e)=>{ if(e.target.closest && (e.target.closest('#missionsContainer')||e.target.id==='planningInput'||e.target.id==='porterCustom')) saveStateDebounced(); });
+document.addEventListener('change', ()=>{ saveStateDebounced(); });
+window.addEventListener('beforeunload', saveState);
+window.addEventListener('pagehide', saveState);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveState(); });
 
 // ── PDF IMPORT ──────────────────────────────────────────────────────────────
 (function(){
@@ -1169,6 +1481,9 @@ render();
   input.addEventListener('change', async function(){
     const file = this.files[0];
     if(!file) return;
+    const porter = getPorterName();
+    if(!porter){ alert('Indique un nom de porteur avant de charger le PDF.'); this.value=''; return; }
+
     status.style.display = 'block';
     status.style.color = '';
     status.textContent = '⏳ Lecture du PDF…';
@@ -1180,12 +1495,14 @@ render();
 
       const buf = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+      const pages = [];
       let fullText = '';
 
       for(let p = 1; p <= pdf.numPages; p++){
         const page = await pdf.getPage(p);
         const content = await page.getTextContent();
-        // Group items by Y (rounded 3pt tolerance), sort X within each row
+        pages.push(MissionParser.wordsFromTextContent(content));
+
         const rows = new Map();
         for(const item of content.items){
           const x = item.transform[4];
@@ -1193,7 +1510,6 @@ render();
           if(!rows.has(y)) rows.set(y, []);
           rows.get(y).push({x, text: item.str});
         }
-        // PDF Y is bottom-up → sort descending = top-to-bottom
         const sorted = [...rows.entries()].sort((a,b) => b[0] - a[0]);
         for(const [, items] of sorted){
           items.sort((a,b) => a.x - b.x);
@@ -1204,9 +1520,35 @@ render();
       }
 
       document.getElementById('planningInput').value = fullText;
-      status.textContent = `✅ PDF chargé (${pdf.numPages} page${pdf.numPages>1?'s':''}) — extraction en cours…`;
+      harvestRoster(fullText);
+      if(missions.length) pushUndo();
+
+      let extracted = MissionParser.fromPages(pages, porter).map(r => {
+        const m = emptyMission();
+        Object.assign(m, r);
+        if(!r.date) m.date = todayStr();
+        return applyLieuDefaults(m);
+      });
+
+      if(extracted.length === 0) extracted = extractMissions(fullText, porter);
+
+      if(extracted.length === 0){
+        missions = [];
+        document.getElementById('missionsContainer').innerHTML =
+          '<div class="empty">Aucune mission trouvée pour "' + porter + '" dans ce PDF. Vérifie le nom du porteur.</div>' +
+          '<button class="btn full-ghost" onclick="addManualMission()">+ Ajouter une mission manuelle</button>';
+        status.textContent = '⚠️ Aucune mission pour « ' + porter + ' ».';
+        status.style.color = '#c0392b';
+        this.value = '';
+        return;
+      }
+
+      missions = extracted;
+      render();
+      saveState();
+      const n = extracted.length;
+      status.textContent = `✅ ${n} mission${n>1?'s':''} extraite${n>1?'s':''} (${pdf.numPages} page${pdf.numPages>1?'s':''}).`;
       status.style.color = '#27ae60';
-      document.getElementById('extractBtn').click();
     } catch(e) {
       status.textContent = '❌ Erreur : ' + e.message;
       status.style.color = '#c0392b';
