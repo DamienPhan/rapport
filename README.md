@@ -1,43 +1,99 @@
 # Rapports de mission
 
-Outil web autonome pour générer rapidement les rapports de fin de mission (transferts aéroport), à partir du planning du jour.
+Application web mono-page pour générer rapidement les rapports de mission
+des porteurs de l'aéroport de Nice Côte d'Azur, à partir du planning PDF
+quotidien.
 
-🔗 **Lien direct** : https://damienphan.github.io/rapport/
+🔗 **App en ligne** : https://damienphan.github.io/Rapport_missions/
 
-## Fonctionnement
+## Le besoin
 
-1. **Choisir le porteur** — sélectionne ton nom dans la liste (ou "Autre..." pour en saisir un).
-2. **Coller le planning** — copie le texte du planning PDF du jour et colle-le dans la zone de texte.
-3. **Extraire** — un clic repère tous les blocs où le nom du porteur apparaît et préremplit automatiquement :
-   - Booking #, date, vol, terminal, type de service (DEP/ARR)
-   - Client, greeteur, nombre de passagers
-   - Lieu de dépose (Tapis bagage / Dépose minute / Parking pro / Check-in + numéro de vol pour les départs)
-4. **Compléter** — ajuste les champs restants (bagages, détaxe, lieu de rencontre, problème, porteurs, satisfaction). Le total de bagages se calcule automatiquement.
-5. **Générer le rapport** — copie le texte formaté dans le presse-papier, prêt à coller dans le message à envoyer.
+Chaque jour, un planning PDF liste toutes les missions (vols, clients,
+greeters, types de service) toutes équipes confondues. Un porteur doit en
+extraire uniquement ses propres missions et produire, pour chacune, un
+rapport texte structuré (6 sections) à coller ailleurs (tablette, app
+métier...).
 
-Chaque clic sur "Extraire" remplace la liste par les missions du porteur sélectionné (utile pour changer de porteur).
+Faire ça à la main, mission par mission, est lent et source d'erreurs.
+L'app automatise l'extraction et ne laisse que la vérification/édition.
 
-Un bouton **"+ Ajouter une mission manuelle"** permet d'ajouter une mission absente du planning, avec une fiche vierge.
+## Fonctionnement en un coup d'œil
 
-## Particularités
+1. Sélectionner son nom dans la liste déroulante.
+2. **Charger le PDF du jour** (mode recommandé, fiable à 100 % sur les
+   plannings testés) **ou coller le texte** du planning (mode de repli).
+3. L'app affiche une carte par mission trouvée, pré-remplie : booking,
+   vol, terminal, type (arrivée/départ), client, greeter, lieux de
+   rencontre/dépose, bagages...
+4. Vérifier/corriger si besoin, puis générer le rapport de chaque mission
+   (bouton sur la carte) pour le copier ailleurs.
 
-- Les valeurs par défaut (porteurs, satisfaction, détaxe, lieux...) sont mémorisées d'une mission à l'autre pendant la session, pour limiter les ressaisies.
-- Les champs "Lieu de rencontre" et "Lieu de dépose" ont une option "Autre..." avec saisie libre pour les cas non standards.
-- La date est préremplie avec la date du jour si elle n'est pas trouvée dans le planning.
+Une fois un planning chargé, **changer de porteur dans la liste recharge
+automatiquement ses missions** — pas besoin de recharger le fichier.
 
-## Technique
+### Deux moteurs d'extraction
 
-Fichier `index.html` unique, sans dépendance externe ni serveur — HTML/CSS/JS vanille. Fonctionne hors-ligne une fois ouvert dans un vrai navigateur (Safari/Chrome). 
+| Mode | Méthode | Fiabilité |
+|---|---|---|
+| **Charger le PDF** | reconstruction de la table par coordonnées spatiales (x, y) via pdf.js (`parser.js`) | validée à 100 % sur tous les plannings testés, y compris les plus éclatés |
+| **Coller le texte** | heuristiques sur texte aplati, découpage par référence booking (`index.html`) | sûr (jamais de valeur fausse affichée comme certaine) mais peut tomber en saisie manuelle ("chips") sur les blocs vraiment ambigus |
 
-⚠️ L'aperçu "Quick Look" des fichiers (Files iOS) désactive JavaScript : utiliser le lien GitHub Pages ou ouvrir le fichier dans un navigateur complet.
+Principe non négociable des deux moteurs : **ne jamais afficher une valeur
+incertaine comme si elle était sûre**. En cas d'ambiguïté réelle (vol
+dupliqué entre deux missions différentes, nom de porteur détaché de sa
+référence par le collage...), l'app demande une sélection manuelle plutôt
+que de deviner.
 
-## Mettre à jour
+### Règles métier encodées
 
-1. Ouvrir `index.html` dans ce repo.
-2. Crayon (éditer) → coller le nouveau contenu → "Commit changes".
-3. Le site se met à jour automatiquement en quelques secondes via GitHub Pages.
+- **Client** : ACA (Aéroport Nice Côte d'Azur) → booking affiché sous forme
+  `M#xxxxx` ; agences diverses → référence `[2026-xxxxxx]` ; Monaco Mediax,
+  WELL'COM AIR reconnus spécifiquement.
+- **Type de service** : Arrivée / Départ / Service (sans vol).
+- **Lieux par défaut** (appliqués une fois à l'extraction, modifiables
+  ensuite) :
+  - Arrivée → rencontre **Tapis bagage**, dépose **Parking pro**
+  - Départ → rencontre **Dépose minute**, dépose **Check-in + vol**
+- **Greeter** : détecté avec ou sans libellé explicite (`Greeter:`,
+  `GREETER :`, ou simplement `NOM +téléphone` juste après le porteur).
+
+### Référentiels auto-alimentés
+
+La liste des porteurs et des greeters n'est pas figée dans le code : chaque
+planning chargé (PDF ou texte) est analysé pour en extraire automatiquement
+les nouveaux noms, qui sont mémorisés localement (`localStorage`) et
+réinjectés dans les listes déroulantes / l'autocomplétion. Un nouveau
+collègue ou un nouveau greeter apparaît donc sans mise à jour du code.
+
+### Persistance locale
+
+- Sauvegarde automatique de la session du jour (anti-perte si l'onglet se
+  ferme, notamment sur iOS).
+- Annulation (undo) jusqu'à 20 niveaux.
+- Pas de backend : tout reste dans le navigateur de l'appareil utilisé.
 
 ## Limites connues
 
-- L'extraction est basée sur des motifs de texte (regex) et dépend de la mise en forme du PDF exporté ; certains champs (vol, terminal, client) peuvent nécessiter une correction manuelle en cas d'OCR imprécis ou de blocs fusionnés dans le planning.
-- Aucune donnée n'est sauvegardée entre deux ouvertures de la page (pas de stockage persistant).
+- **Missions LIVE** (ajoutées le jour même, absentes du PDF du matin) :
+  saisie manuelle, hors périmètre de l'extraction automatique.
+- Le mode copier-coller peut tomber en saisie manuelle sur des blocs où la
+  mise en page a réellement détruit l'association ligne ↔ mission ; charger
+  le PDF directement résout ces cas.
+
+## Déploiement
+
+Application statique, aucun build. Pour mettre à jour le site :
+
+1. Remplacer `index.html` et/ou `parser.js` à la racine du dépôt
+   `damienphan/Rapport_missions`.
+2. GitHub Pages republie automatiquement.
+
+Dépendance externe : [pdf.js](https://mozilla.github.io/pdf.js/) chargé
+depuis un CDN (pas de build, pas d'installation).
+
+## Pour aller plus loin
+
+Voir [`CLAUDE.md`](./CLAUDE.md) pour le contexte technique complet
+(architecture détaillée, géométrie du parsing PDF, historique des
+décisions, pièges connus) — destiné à toute IA ou développeur reprenant
+le projet.

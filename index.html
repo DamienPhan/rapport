@@ -271,7 +271,7 @@
     <h2>1. Porteur</h2>
     <div class="field">
       <label>Nom du porteur</label>
-      <select id="porterSelect" onchange="togglePorterCustom()">
+      <select id="porterSelect" onchange="togglePorterCustom(); reloadForPorter()">
         <option>Damien P.</option>
         <option>Adam E</option>
         <option>Antoine D.</option>
@@ -305,7 +305,7 @@
     </div>
     <div class="field" id="porterCustomField" style="display:none">
       <label>Nom exact (comme dans le planning)</label>
-      <input id="porterCustom" placeholder="ex: Bastien">
+      <input id="porterCustom" placeholder="ex: Bastien" onchange="reloadForPorter()">
     </div>
   </div>
 
@@ -369,12 +369,13 @@ let defaults = {
   probleme: 'Non',
   porteurs: '1',
   satisfaction: 'Excellente',
-  bagStandard: '1',
+  bagStandard: '0',
   bagHorsFormat: '0',
   bagCage: '0'
 };
 
 let missions = [];
+let lastPdfPages = null;   // pages coordonnées du dernier PDF chargé (pour recharger au changement de porteur)
 
 function emptyMission(){
   return {
@@ -426,6 +427,14 @@ function todayStr(){
   return `${dd}/${mm}`;
 }
 
+// minutes depuis minuit → "HH:MM" ; '' si inconnu (9999)
+function fmtTime(mins){
+  if(mins == null || mins >= 9999 || mins < 0) return '';
+  const h = String(Math.floor(mins/60)).padStart(2,'0');
+  const m = String(mins%60).padStart(2,'0');
+  return `${h}:${m}`;
+}
+
 function togglePorterCustom(){
   const sel = document.getElementById('porterSelect');
   document.getElementById('porterCustomField').style.display = sel.value === 'custom' ? 'block' : 'none';
@@ -437,6 +446,40 @@ function getPorterName(){
     return document.getElementById('porterCustom').value.trim();
   }
   return sel.value;
+}
+
+// Recharge automatiquement les missions du porteur sélectionné depuis la
+// dernière source chargée (PDF en priorité, sinon texte collé). Ne fait rien
+// si aucun planning n'a encore été chargé, pour ne pas vider l'écran.
+function reloadForPorter(){
+  const porter = getPorterName();
+  if(!porter) return;
+  const text = document.getElementById('planningInput').value;
+  let extracted = [];
+  if(lastPdfPages){
+    extracted = MissionParser.fromPages(lastPdfPages, porter).map(r => {
+      const m = emptyMission();
+      Object.assign(m, r);
+      if(!r.date) m.date = todayStr();
+      return applyLieuDefaults(m);
+    });
+    if(!extracted.length && text) extracted = extractMissions(text, porter);
+  } else if(text){
+    extracted = extractMissions(text, porter);
+  } else {
+    return; // rien de chargé
+  }
+  if(missions.length) pushUndo();
+  if(extracted.length){
+    missions = extracted;
+    render();
+  } else {
+    missions = [];
+    document.getElementById('missionsContainer').innerHTML =
+      '<div class="empty">Aucune mission trouvée pour « ' + porter + ' ».</div>' +
+      '<button class="btn full-ghost" onclick="addManualMission()">+ Ajouter une mission manuelle</button>';
+  }
+  saveState();
 }
 
 // ---- Référentiels auto-alimentés (porteurs + greeters) ----------------------
@@ -672,7 +715,7 @@ function extractMissionsCopyPaste(text, porterName){
   }
   function tokPorters(sec){
     const lines=sec.split('\n');const o=[];
-    const ctxRe=/^(\+?\d|0\d|Greete?r|Tablette|Flight Class|Client|VIP|Chauff|nathan|Nathan|Contact|CXL)/i;
+    const ctxRe=/^[?\s]*(\+?\d|0\d|Greete?r|Tablette|Flight Class|Client|VIP|Chauff|nathan|Nathan|Contact|CXL)/i;
     for(let i=0;i<lines.length;i++){
       const t=lines[i].trim();
       if(looksLikePorter(t)){
@@ -745,7 +788,7 @@ function extractMissionsCopyPaste(text, porterName){
   // gates off the clean fast-path so dumped rows always go through rank alignment.
   function scrambledCluster(sec){
     const lines=sec.split('\n');
-    const ctxRe=/^(\+?\d|0\d|Greete?r|Tablette|Flight Class|Client|VIP|Chauff|nathan|Nathan|Contact|CXL)/i;
+    const ctxRe=/^[?\s]*(\+?\d|0\d|Greete?r|Tablette|Flight Class|Client|VIP|Chauff|nathan|Nathan|Contact|CXL)/i;
     let flightSincePorter=true, flightSinceBooking=true;
     for(let i=0;i<lines.length;i++){
       const t=lines[i].trim();
@@ -1080,7 +1123,10 @@ function pickBooking(idx, el){
   const pb = document.getElementById(fieldId(idx,'prebooking'));
   if(pb) pb.value = el.getAttribute('data-live') === '1' ? 'LIVE' : 'PRÉ-BOOKING';
   const titleEl = document.querySelector(`.mission[data-idx="${idx}"] .mission-head strong`);
-  if(titleEl) titleEl.textContent = 'Booking ' + el.getAttribute('data-num');
+  if(titleEl){
+    const t = missions[idx] ? fmtTime(missions[idx].sortTime) : '';
+    titleEl.textContent = 'Booking ' + el.getAttribute('data-num') + (t ? ' · ' + t : '');
+  }
   const parent = el.parentNode;
   parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
@@ -1099,7 +1145,7 @@ function renderMission(m, idx){
   return `
   <div class="mission" data-idx="${idx}">
     <div class="mission-head">
-      <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}</strong>
+      <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' · ' + fmtTime(m.sortTime) : ''}</strong>
       <div class="right">
         <span class="badge">${m.type || '—'}</span>
         <button class="del" onclick="removeMission(${idx})" title="Supprimer">✕</button>
@@ -1133,16 +1179,8 @@ function renderMission(m, idx){
 
       <div class="grid">
         <div class="field"><label>Bagages standard</label><input id="${fieldId(idx,'bagStandard')}" value="${m.bagStandard}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
-        <div class="field"><label>Hors format</label>
-          <select id="${fieldId(idx,'bagHorsFormat')}" onchange="updateTotal(${idx})">
-            ${['0','1','2','3','4','5','N/A'].map(v=>`<option ${m.bagHorsFormat==v?'selected':''}>${v}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field full"><label>Cage animal</label>
-          <select id="${fieldId(idx,'bagCage')}" onchange="updateTotal(${idx})">
-            ${['0','1','2','N/A'].map(v=>`<option ${m.bagCage==v?'selected':''}>${v}</option>`).join('')}
-          </select>
-        </div>
+        <div class="field"><label>Hors format</label><input id="${fieldId(idx,'bagHorsFormat')}" value="${m.bagHorsFormat}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+        <div class="field full"><label>Cage animal</label><input id="${fieldId(idx,'bagCage')}" value="${m.bagCage}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
       </div>
       <div class="total-row">
         <span>Total bagages pris en charge</span>
@@ -1313,7 +1351,10 @@ function clearPlanningInput(){
 function addManualMission(){
   pushUndo();
   syncAll();
-  missions.push(emptyMission());
+  const m = emptyMission();
+  m.prebooking = 'LIVE';
+  m.booking = '2026-';
+  missions.push(m);
   render();
   saveState();
 }
@@ -1334,10 +1375,8 @@ function toggleAutre(idx, field){
 
 function updateTotal(idx){
   const s = parseInt(document.getElementById(fieldId(idx,'bagStandard')).value)||0;
-  const hv = document.getElementById(fieldId(idx,'bagHorsFormat')).value;
-  const cv = document.getElementById(fieldId(idx,'bagCage')).value;
-  const h = hv==='N/A' ? 0 : (parseInt(hv)||0);
-  const c = cv==='N/A' ? 0 : (parseInt(cv)||0);
+  const h = parseInt(document.getElementById(fieldId(idx,'bagHorsFormat')).value)||0;
+  const c = parseInt(document.getElementById(fieldId(idx,'bagCage')).value)||0;
   document.getElementById(fieldId(idx,'total')).textContent = s+h+c;
 }
 
@@ -1360,7 +1399,10 @@ function resolveLieu(idx, field){
 
 function generateReport(idx){
   const _hf = val(idx,'bagHorsFormat'); const _ca = val(idx,'bagCage');
-  const total = (parseInt(val(idx,'bagStandard'))||0) + (_hf==='N/A'?0:(parseInt(_hf)||0)) + (_ca==='N/A'?0:(parseInt(_ca)||0));
+  const _hfN = parseInt(_hf)||0; const _caN = parseInt(_ca)||0;
+  const hfDisp = _hfN > 0 ? String(_hfN) : 'n/a';
+  const caDisp = _caN > 0 ? String(_caN) : 'n/a';
+  const total = (parseInt(val(idx,'bagStandard'))||0) + _hfN + _caN;
   const lieuRencontre = resolveLieu(idx,'lieuRencontre');
   const lieuDepose = resolveLieu(idx,'lieuDepose');
   const greeteur = val(idx,'greeteur');
@@ -1379,8 +1421,8 @@ Nombre de passagers : ${val(idx,'pax')}
 
 2. Bagages
 Nombre de bagages Standard : ${val(idx,'bagStandard')}
-Hors format : ${val(idx,'bagHorsFormat')}
-Cage animal : ${val(idx,'bagCage')}
+Hors format : ${hfDisp}
+Cage animal : ${caDisp}
 
 Total Bagages pris en charge : ${total}
 
@@ -1520,6 +1562,7 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
       }
 
       document.getElementById('planningInput').value = fullText;
+      lastPdfPages = pages;
       harvestRoster(fullText);
       if(missions.length) pushUndo();
 
