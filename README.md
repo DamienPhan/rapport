@@ -4,7 +4,7 @@ Application web mono-page pour générer rapidement les rapports de mission
 des porteurs de l'aéroport de Nice Côte d'Azur, à partir du planning PDF
 quotidien.
 
-🔗 **App en ligne** : https://damienphan.github.io/Rapport_missions/
+🔗 **App en ligne** : https://damienphan.github.io/rapport/
 
 ## Le besoin
 
