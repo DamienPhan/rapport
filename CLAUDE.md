@@ -410,6 +410,27 @@ pas un oubli :
 - **Dépendance pdf.js via CDN sans SRI** : pas de vérification
   d'intégrité. Accepté avec la sécurité globale.
 
+## 8. Direction artistique (DA Well'Com Air)
+
+L'UI suit la DA de Well'Com Air (service VIP aéroportuaire premium). Palette
+en variables CSS dans `:root` :
+
+- `--navy #0b1b2e` / `--navy-2 #13293f` : midnight profond (fond du logo,
+  en-tête, bandeau mission).
+- `--gold #c8a86b` / `--gold-deep #a8884c` : or champagne, accent signature
+  (filets, badges, heure dans la bannière, chips actives, focus).
+- `--bg #f6f3ee` ivoire chaud, `--cream #faf5ea` pour chips/total.
+- Titrage en capitales très espacées (`letter-spacing:.34em`) ; wordmark
+  « WELL'COM AIR » en **Cormorant Garamond** (Google Fonts, repli Georgia)
+  dans l'en-tête. Le reste de l'UI reste en sans-serif système pour la
+  lisibilité des formulaires.
+
+L'ancien `--amber` est conservé comme **alias de `--gold`** pour que toute
+règle résiduelle reste cohérente. La couleur exacte du hex de marque n'était
+pas extractible automatiquement (logo en image, CSS du thème non lisible) ;
+la palette est calée sur l'esthétique publique de la marque (sombre + or,
+logo blanc sur fond foncé). À ajuster si Damien fournit la charte exacte.
+
 ## Pour aller plus loin
 
 Avant toute modification du parsing, relire intégralement §3 et §5 — la

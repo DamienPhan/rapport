@@ -93,6 +93,10 @@ depuis un CDN (pas de build, pas d'installation).
 
 ## Pour aller plus loin
 
+L'interface reprend la direction artistique de **Well'Com Air** (navy
+midnight profond, or champagne, ivoire chaud, titrage en capitales
+espacées) pour une identité premium cohérente avec le service VIP.
+
 Voir [`CLAUDE.md`](./CLAUDE.md) pour le contexte technique complet
 (architecture détaillée, géométrie du parsing PDF, historique des
 décisions, pièges connus) — destiné à toute IA ou développeur reprenant

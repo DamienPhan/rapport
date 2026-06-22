@@ -3,18 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rapports de mission</title>
+<title>Rapports de mission · WELL'COM AIR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --navy:#10243d;
-    --navy-2:#1c3a5e;
-    --amber:#e6a23c;
-    --bg:#f4f6f8;
+    --navy:#0b1b2e;        /* midnight profond (fond logo) */
+    --navy-2:#13293f;      /* navy relevé (bandeau mission) */
+    --gold:#c8a86b;        /* or champagne (accent signature) */
+    --gold-deep:#a8884c;   /* or foncé pour texte sur clair */
+    --amber:#c8a86b;       /* alias → or (compat anciennes règles) */
+    --bg:#f6f3ee;          /* ivoire chaud */
     --card:#ffffff;
-    --line:#dde3ea;
-    --text:#1a1f29;
-    --muted:#6b7585;
+    --line:#e7e0d4;        /* filet chaud */
+    --text:#1b2330;
+    --muted:#8b8576;       /* gris chaud */
     --ok:#2e7d4f;
+    --cream:#faf5ea;       /* fond chips / total */
+    --cream-line:#e8d9b8;
   }
   *{box-sizing:border-box;}
   body{
@@ -25,21 +32,33 @@
     padding-bottom:60px;
   }
   header{
-    background:var(--navy);
+    background:
+      radial-gradient(120% 140% at 100% 0%, rgba(200,168,107,.16), transparent 60%),
+      var(--navy);
     color:#fff;
-    padding:20px 16px 16px;
-    border-bottom:3px solid var(--amber);
+    padding:22px 16px 18px;
+    border-bottom:2px solid var(--gold);
+  }
+  .wordmark{
+    font-family:"Cormorant Garamond",Georgia,serif;
+    font-weight:600;
+    font-size:1.05rem;
+    letter-spacing:.34em;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin:0 0 8px;
+    padding-left:.12em;
   }
   header h1{
     margin:0;
-    font-size:1.25rem;
+    font-size:1.22rem;
     font-weight:700;
-    letter-spacing:.02em;
+    letter-spacing:.01em;
   }
   header p{
     margin:6px 0 0;
     font-size:.82rem;
-    color:#b9c6d6;
+    color:rgba(255,255,255,.66);
   }
   main{
     padding:16px;
@@ -49,14 +68,16 @@
   .panel{
     background:var(--card);
     border:1px solid var(--line);
-    border-radius:10px;
+    border-radius:12px;
     padding:14px;
     margin-bottom:16px;
+    box-shadow:0 1px 2px rgba(11,27,46,.04);
   }
   .panel h2{
     font-size:.95rem;
     margin:0 0 8px;
-    color:var(--navy-2);
+    color:var(--navy);
+    letter-spacing:.01em;
   }
   textarea{
     width:100%;
@@ -73,17 +94,21 @@
     background:var(--navy);
     color:#fff;
     border:none;
-    border-radius:8px;
-    padding:11px 18px;
+    border-radius:10px;
+    padding:12px 18px;
     font-size:.9rem;
     font-weight:600;
+    letter-spacing:.02em;
     cursor:pointer;
     margin-top:10px;
     width:100%;
+    transition:filter .15s,background .15s;
   }
+  .btn:hover{filter:brightness(1.08);}
   .btn.secondary{
-    background:var(--amber);
-    color:#10243d;
+    background:linear-gradient(180deg,#d4b87e,var(--gold));
+    color:var(--navy);
+    font-weight:700;
   }
   .btn.ghost{
     background:transparent;
@@ -115,21 +140,24 @@
   .mission-head{
     background:var(--navy-2);
     color:#fff;
-    padding:10px 14px;
+    padding:11px 14px;
     display:flex;
     justify-content:space-between;
     align-items:center;
     gap:8px;
+    border-bottom:2px solid var(--gold);
   }
-  .mission-head strong{font-size:.95rem;}
+  .mission-head strong{font-size:.95rem;letter-spacing:.01em;}
+  .mission-head .mtime{color:var(--gold);font-weight:600;}
   .mission-head .right{display:flex;align-items:center;gap:10px;}
   .mission-head .badge{
-    font-size:.7rem;
-    background:var(--amber);
-    color:#10243d;
-    padding:2px 8px;
+    font-size:.68rem;
+    background:linear-gradient(180deg,#d4b87e,var(--gold));
+    color:var(--navy);
+    padding:3px 10px;
     border-radius:20px;
     font-weight:700;
+    letter-spacing:.04em;
   }
   .mission-head .del{
     background:none;
@@ -160,11 +188,17 @@
   input, select, textarea.small{
     width:100%;
     border:1px solid var(--line);
-    border-radius:6px;
-    padding:8px;
+    border-radius:8px;
+    padding:9px;
     font-size:.88rem;
     font-family:inherit;
-    background:#fcfdfe;
+    background:#fcfbf8;
+    transition:border-color .15s,box-shadow .15s;
+  }
+  input:focus, select:focus, textarea:focus{
+    outline:none;
+    border-color:var(--gold);
+    box-shadow:0 0 0 3px rgba(200,168,107,.20);
   }
   textarea.small{min-height:50px;resize:vertical;}
   .autre-input{margin-top:6px;}
@@ -172,13 +206,14 @@
     display:flex;
     justify-content:space-between;
     align-items:center;
-    background:#eef2f6;
-    border-radius:6px;
+    background:var(--cream);
+    border:1px solid var(--cream-line);
+    border-radius:8px;
     padding:8px 10px;
     margin:6px 0 10px;
     font-size:.85rem;
   }
-  .total-row strong{color:var(--navy);}
+  .total-row strong{color:var(--gold-deep);font-size:1rem;}
   .output{
     margin-top:10px;
     border-top:1px dashed var(--line);
@@ -217,15 +252,15 @@
     margin-top:10px;
   }
   .candidates{
-    background:#fff7ea;
-    border:1px solid #f0d9b0;
-    border-radius:8px;
+    background:var(--cream);
+    border:1px solid var(--cream-line);
+    border-radius:10px;
     padding:10px;
     margin-bottom:10px;
   }
   .candidates .clabel{
     font-size:.72rem;
-    color:#9a6b1e;
+    color:var(--gold-deep);
     text-transform:uppercase;
     letter-spacing:.03em;
     margin-bottom:6px;
@@ -235,7 +270,7 @@
   .chips:last-child{margin-bottom:0;}
   .csub{
     font-size:.78rem;
-    color:#9a6b1e;
+    color:var(--gold-deep);
     margin:4px 0 4px;
     font-weight:600;
   }
@@ -250,18 +285,20 @@
   }
   .chip.active{
     background:var(--navy);
-    color:#fff;
+    color:var(--gold);
     border-color:var(--navy);
+    font-weight:600;
   }
   .pdfrow { margin-bottom: 8px; }
-  .pdfbtn { display: inline-block; cursor: pointer; background: #2c3e50; }
-  .pdfbtn:hover { background: #1a252f; }
+  .pdfbtn { display: inline-block; cursor: pointer; background: var(--navy); }
+  .pdfbtn:hover { background: var(--navy-2); }
   .orsep { text-align: center; color: #aaa; font-size: .8rem; margin: 8px 0; letter-spacing: .05em; }
 </style>
 </head>
 <body>
 
 <header>
+  <div class="wordmark">WELL'COM AIR</div>
   <h1>Rapports de mission</h1>
   <p>Choisis le porteur, colle le planning du jour, extrait automatiquement ses missions et complète les champs restants.</p>
 </header>
@@ -1125,7 +1162,7 @@ function pickBooking(idx, el){
   const titleEl = document.querySelector(`.mission[data-idx="${idx}"] .mission-head strong`);
   if(titleEl){
     const t = missions[idx] ? fmtTime(missions[idx].sortTime) : '';
-    titleEl.textContent = 'Booking ' + el.getAttribute('data-num') + (t ? ' · ' + t : '');
+    titleEl.innerHTML = 'Booking ' + el.getAttribute('data-num') + (t ? ' <span class="mtime">· ' + t + '</span>' : '');
   }
   const parent = el.parentNode;
   parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
@@ -1145,7 +1182,7 @@ function renderMission(m, idx){
   return `
   <div class="mission" data-idx="${idx}">
     <div class="mission-head">
-      <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' · ' + fmtTime(m.sortTime) : ''}</strong>
+      <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
       <div class="right">
         <span class="badge">${m.type || '—'}</span>
         <button class="del" onclick="removeMission(${idx})" title="Supprimer">✕</button>
