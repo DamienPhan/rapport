@@ -132,9 +132,10 @@
 
   function flightFromItinerary(itinRaw) {
     var itin = itinRaw.replace(/(^|\s)NCE(?=\s|$)/g, ' ');
-    var m = itin.match(/N[°o]\s*Vol\s*([A-Za-z0-9]{2,7})/i);
+    // Accept: letter(s) + optional space + digits (covers "BA 328") OR plain alphanumeric up to 7 chars
+    var m = itin.match(/N[°o]\s*Vol\s*([A-Za-z]{1,3}\s*\d{1,5}[A-Za-z]?|[A-Za-z0-9]{2,7})/i);
     if (!m) return { vol: '', terminal: '' };
-    var vol = m[1].toUpperCase();
+    var vol = m[1].replace(/\s+/g, '').toUpperCase();
     var after = itin.slice(m.index + m[0].length);
     var tm = after.match(/Terminal\s*(T?\d{1,2}|[A-Z](?=\s))/);
     var term = tm ? tm[1].replace(/^T/i, '') : '';
