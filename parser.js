@@ -108,23 +108,58 @@
     return false;
   }
 
-  function greeterFromLines(lines, porter) {
+  function phoneNorm(s) {
+    var c = (s || '').replace(/[^\d+]/g, '');
+    // Must start with + or 0 (rejects false positives like "20486466" from timestamps)
+    if (!/^[+0]/.test(c)) return '';
+    return c.length >= 9 ? c : '';
+  }
+
+  function greeterInfoFromLines(lines, porter) {
+    // Pass 1: explicit "Greeter: NAME" label
     for (var i = 0; i < lines.length; i++) {
-      var m = lines[i].match(/greete?r[\s:]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
+      var m = lines[i].match(/greete?r[s]?[\s:,]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
       if (m) {
-        var g = m[1].trim();
-        if (['a', 'à', 'venir', 'voir'].indexOf(g.toLowerCase()) === -1) return g;
+        var gname = m[1].trim();
+        if (['a', 'à', 'venir', 'voir'].indexOf(gname.toLowerCase()) === -1) {
+          // Phone: inline (rest of line after name) or next line
+          var afterName = lines[i].slice(lines[i].indexOf(gname) + gname.length);
+          var pm = afterName.match(/([+?]\d[\d\s?]{7,}|\d{8,}[\d\s?]*)/);
+          var phone = pm ? phoneNorm(pm[1]) : '';
+          if (!phone && i + 1 < lines.length) {
+            var nm = lines[i + 1].match(/^\s*([+?]?\d[\d\s?]{8,})/);
+            if (nm) phone = phoneNorm(nm[1]);
+          }
+          return { name: gname, phone: phone };
+        }
       }
     }
+    // Pass 2: fallback — name followed by phone (no "Greeter:" label)
     var self = porter ? porter.replace(/\.$/, '') : '';
     var porterSeen = !porter;
     for (var j = 0; j < lines.length; j++) {
       var t = lines[j].trim();
       if (porter && t.replace(/\.$/, '') === self) { porterSeen = true; continue; }
       if (!porterSeen) continue;
-      var gm = t.match(/^([A-ZÀ-Ý][A-Za-zÀ-ÿ.\-]+)\s+\+?\d/);
+      var gm = t.match(/^([A-ZÀ-Ý][A-Za-zÀ-ÿ.\-]+)\s+([+?]?\d[\d\s?]{7,})/);
       if (gm && !/^(Phone|Flight|Note|Chauff|Greete?r|NCE|Terminal|Aviation)$/i.test(gm[1]) && gm[1].replace(/\.$/, '') !== self) {
-        return gm[1];
+        return { name: gm[1], phone: phoneNorm(gm[2]) };
+      }
+    }
+    return { name: '', phone: '' };
+  }
+
+  function contactPhoneFrom(lines) {
+    for (var i = 0; i < lines.length; i++) {
+      if (/contact\s+chauffeur/i.test(lines[i])) {
+        // Phone inline on same line
+        var rm = lines[i].match(/contact\s+chauffeur[^+\d\n]{0,15}([+?]?\d[\d\s?]{8,})/i);
+        if (rm) return phoneNorm(rm[1]);
+        // Phone on next line
+        if (i + 1 < lines.length) {
+          var nm = lines[i + 1].match(/([+?]?\d[\d\s?]{8,})/);
+          if (nm) return phoneNorm(nm[1]);
+        }
       }
     }
     return '';
@@ -252,6 +287,7 @@
 
     var isService = !fl.vol && /\bService\b/i.test(row.c6 + ' ' + row.itin);
 
+    var greeterInfo = greeterInfoFromLines(row.vn, row.porter);
     return {
       booking: booking,
       date: date,
@@ -259,7 +295,9 @@
       terminal: isService ? '' : fl.terminal,
       type: isService ? 'Service' : type,
       client: isACA ? 'ACA ETIC' : client.label,
-      greeteur: client.tok === 'AGENCY' ? '' : greeterFromLines(row.vn, row.porter),
+      greeteur: client.tok === 'AGENCY' ? '' : greeterInfo.name,
+      greeteurPhone: client.tok === 'AGENCY' ? '' : greeterInfo.phone,
+      contactPhone: contactPhoneFrom(row.vn),
       pax: paxFromColumn(row.c2),
       prebooking: 'PRÉ-BOOKING',
       lieuDepose: isService ? '' : lieuFor(type, row.itin),

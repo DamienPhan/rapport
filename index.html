@@ -289,6 +289,24 @@
     border-color:var(--navy);
     font-weight:600;
   }
+  a.tel-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    margin-top:5px;
+    padding:4px 11px;
+    border-radius:20px;
+    background:var(--cream);
+    border:1px solid var(--cream-line);
+    color:var(--navy);
+    font-size:.8rem;
+    font-weight:600;
+    text-decoration:none;
+    letter-spacing:.01em;
+    transition:background .15s;
+  }
+  a.tel-chip:hover{background:var(--gold);border-color:var(--gold);}
+  .tel-row{margin-top:2px;}
   .pdfrow { margin-bottom: 8px; }
   .pdfbtn { display: inline-block; cursor: pointer; background: var(--navy); }
   .pdfbtn:hover { background: var(--navy-2); }
@@ -416,7 +434,7 @@ let lastPdfPages = null;   // pages coordonnées du dernier PDF chargé (pour re
 
 function emptyMission(){
   return {
-    booking:'', date: todayStr(), vol:'', terminal:'', type:'DEP', client:'', greeteur:'', pax:'',
+    booking:'', date: todayStr(), vol:'', terminal:'', type:'DEP', client:'', greeteur:'', greeteurPhone:'', contactPhone:'', pax:'',
     prebooking: defaults.prebooking,
     detaxe: defaults.detaxe,
     lieuRencontre: defaults.lieuRencontre,
@@ -472,6 +490,51 @@ function fmtTime(mins){
   return `${h}:${m}`;
 }
 
+function phoneNorm(s){
+  if(!s) return '';
+  const c = s.replace(/[^\d+]/g, '');
+  if(!/^[+0]/.test(c)) return '';
+  return c.length >= 9 ? c : '';
+}
+
+// Post-process missions to fill greeteurPhone + contactPhone from raw text.
+// Called after both PDF and copy-paste extraction.
+function enrichMissionsWithPhones(missions, fullText){
+  missions.forEach(m => {
+    if(!m.greeteurPhone && m.greeteur){
+      const esc = m.greeteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const r = fullText.match(new RegExp('greete?r[s]?[\\s:,]+' + esc, 'i'));
+      if(r){
+        // Flatten ~200 chars after greeter name (handles split numbers like "+33 6 47\n48 64 66")
+        const flat = fullText.slice(r.index + r[0].length, r.index + r[0].length + 200).replace(/\n/g, ' ');
+        const pm = flat.match(/([+?]?\d[\d\s?]{8,})/);
+        if(pm) m.greeteurPhone = phoneNorm(pm[1]);
+      }
+    }
+    if(!m.contactPhone){
+      const bk = (m.booking || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const idx = bk ? fullText.indexOf(bk) : -1;
+      if(idx >= 0){
+        // Narrow window: from booking to next booking ref (avoids bleeding into adjacent missions).
+        // If the next booking ref is within 150 chars it's the mission's own planning number
+        // (e.g. "[2026-001063] ... 10843-1") — skip it and use the one after.
+        const after = fullText.slice(idx + bk.length);
+        let nb = after.match(/\b\d{4,6}-\d+\b/);
+        if(nb && nb.index < 150){
+          const after2 = after.slice(nb.index + nb[0].length);
+          const nb2 = after2.match(/\b\d{4,6}-\d+\b/);
+          nb = nb2 ? { index: nb.index + nb[0].length + nb2.index } : null;
+        }
+        const end = nb ? idx + bk.length + nb.index : Math.min(idx + 2500, fullText.length);
+        const slice = fullText.slice(idx, end);
+        let r = slice.match(/contact\s+chauffeur[^+\d\n]{0,15}([+?]?\d[\d\s?]{8,})/i);
+        if(!r) r = slice.match(/contact\s+chauffeur[^\n]*\n\s*([+?]?\d[\d\s?]{8,})/i);
+        if(r) m.contactPhone = phoneNorm(r[1]);
+      }
+    }
+  });
+}
+
 function togglePorterCustom(){
   const sel = document.getElementById('porterSelect');
   document.getElementById('porterCustomField').style.display = sel.value === 'custom' ? 'block' : 'none';
@@ -500,9 +563,12 @@ function reloadForPorter(){
       if(!r.date) m.date = todayStr();
       return applyLieuDefaults(m);
     });
+    const fullText = document.getElementById('planningInput').value;
+    if(extracted.length && fullText) enrichMissionsWithPhones(extracted, fullText);
     if(!extracted.length && text) extracted = extractMissions(text, porter);
   } else if(text){
     extracted = extractMissions(text, porter);
+    if(extracted.length) enrichMissionsWithPhones(extracted, text);
   } else {
     return; // rien de chargé
   }
@@ -631,12 +697,32 @@ function extractMissionsPdfjs(text, porterName){
     const isACA=clientTok==='ACA'||(!clientTok&&mnum);
     const finalBooking=isACA?(mnum||booking):(clientRef||booking);
 
+    // Agency client name: "M. NAME +phone" most reliable; fallback: "NAME [2026-XXXXXX]"
+    let agencyClientName='';
+    if(clientTok==='AGENCY' && clientRef){
+      const mM=W.match(/M\.\s+([A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.' \-]+?)(?=\s+\+\d|\s+(?:Terminal\s+)?T[12]\s+\d{2}:)/i);
+      if(mM) agencyClientName=mM[1].trim();
+      else {
+        const bkEsc=clientRef.replace(/[-]/g,'[-]');
+        const agM=W.match(new RegExp('([A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.\' \\-]+?)\\s*\\['+bkEsc+'\\]'));
+        if(agM) agencyClientName=agM[1].trim().replace(/^M\.\s*/,'');
+      }
+    }
+
     const m=emptyMission();
     m.prebooking='PRÉ-BOOKING';
     const dm=W.match(/(\d{2})\/(\d{2})\/\d{4}/);
     m.date = dm ? dm[1]+'/'+dm[2] : todayStr();
     m.booking=finalBooking; m.vol=vol; m.terminal=term; m.type=type;
-    m.client=isACA?'ACA ETIC':clientTok==='Monaco'?'Monaco Mediax':clientTok==='WELLCOM'?"WELL'COM AIR":'';
+    m.client=isACA?'ACA ETIC':clientTok==='Monaco'?'Monaco Mediax':clientTok==='WELLCOM'?"WELL'COM AIR":agencyClientName;
+    m.greeteur=greeter;
+    // Pax: search "(N)" after the booking ref in full text (avoids bleeding from adjacent missions)
+    if(finalBooking){
+      const bkPos=text.indexOf(finalBooking);
+      const paxWin=bkPos>=0?text.slice(bkPos,bkPos+200):'';
+      const paxScM=paxWin.match(/\((\d+)\)/);
+      if(paxScM) m.pax=paxScM[1];
+    }
     m.greeteur=greeter;
     m.lieuDepose = type==='ARR' ? 'Tapis bagage' : 'AUTO_CHECKIN';
     if(/D[ée]pose-?\s*minute/i.test(W)) m.lieuDepose='Dépose minute';
@@ -1014,6 +1100,23 @@ function extractMissionsCopyPaste(text, porterName){
       let client='';
       const cM = before.match(/(Monaco Mediax|ACA \([^)]+\))(?![^]*(Monaco Mediax|ACA \())/);
       if(cM) client = /Monaco/i.test(cM[1]) ? 'Monaco Mediax' : 'ACA ETIC';
+      else if(/^20\d{2}-/.test(b.num)){
+        // Agency mission: "M. NAME +phone" is the most reliable pattern across text formats
+        const mM = (before + after.slice(0, 1500)).match(/M\.\s+([A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.' \-]+?)(?=\s+\+\d|\s+(?:Terminal\s+)?T[12]\s+\d{2}:)/i);
+        if(mM) client = mM[1].trim();
+        else {
+          // Fallback: "NAME [2026-XXXXXX]" (same line only, newlines excluded from name)
+          const bkEsc = b.num.replace(/[-]/g, '[-]');
+          const agM = text.match(new RegExp('([A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.\' \\-]+?)\\s*\\[' + bkEsc + '\\]'));
+          if(agM) client = agM[1].trim().replace(/^M\.\s*/, '');
+        }
+      }
+
+      // Pax: search "(N)" after the booking ref (not around the porter pos, to avoid bleeding from previous missions)
+      const bkIdx = text.indexOf(b.num, Math.max(0, pos - 200));
+      const paxSearch = bkIdx >= 0 ? text.slice(bkIdx, bkIdx + 200) : '';
+      const paxM = paxSearch.match(/\((\d+)\)/);
+      const pax = paxM ? paxM[1] : '';
 
       const greeteur = greeterFromScope(text.slice(pos, pos + 160));
 
@@ -1022,7 +1125,7 @@ function extractMissionsCopyPaste(text, porterName){
       else if(/Parking\s*Pro/i.test(after) || /Parking\s*Pro/i.test(before.slice(-200))) lieuDepose='Parking pro';
 
       Object.assign(mission, {
-        booking: b.num, type, client, greeteur,
+        booking: b.num, type, client, greeteur, pax,
         vol: f.vol, terminal: f.terminal,
         lieuDepose, bookingOptions: [], flightOptions: []
       });
@@ -1203,7 +1306,10 @@ function renderMission(m, idx){
         <div class="field"><label>Booking #</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
         <div class="field"><label>Date</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
         <div class="field full"><label>Client</label><input id="${fieldId(idx,'client')}" value="${m.client}"></div>
-        <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="ex: Linda.K"></div>
+        <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="ex: Linda.K">
+        ${m.greeteurPhone ? `<div class="tel-row"><a href="tel:${m.greeteurPhone}" class="tel-chip">📞 ${m.greeteurPhone}</a></div>` : ''}
+        </div>
+        ${m.contactPhone ? `<div class="field full"><label>Contact chauffeur</label><div class="tel-row"><a href="tel:${m.contactPhone}" class="tel-chip">📞 ${m.contactPhone}</a></div></div>` : ''}
         <div class="field">
           <label>Pré-booking / Live</label>
           <select id="${fieldId(idx,'prebooking')}">
