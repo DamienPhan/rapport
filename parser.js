@@ -172,7 +172,8 @@
     if (!m) return { vol: '', terminal: '' };
     var vol = m[1].replace(/\s+/g, '').toUpperCase();
     var after = itin.slice(m.index + m[0].length);
-    var tm = after.match(/Terminal\s*(T?\d{1,2}|[A-Z](?=\s))/);
+    // Negative lookahead (?![\d:]) prevents matching timestamps like "19:00:00" as terminal "19"
+    var tm = after.match(/Terminal\s*(T?\d{1,2})(?![\d:])/) || after.match(/Terminal\s*([A-Z])(?=\s)/);
     var term = tm ? tm[1].replace(/^T/i, '') : '';
     if (term && !/^(\d{1,2}|[A-Z])$/.test(term)) term = '';
     return { vol: vol, terminal: term };
@@ -184,6 +185,9 @@
     if (/WELL'COM/.test(c2)) return { tok: 'WELLCOM', label: "WELL'COM AIR" };
     var br = c2.match(/^(.*?)\s*\[(20\d{2}-\d{6})\]/);
     if (br) return { tok: 'AGENCY', ref: br[2], label: norm(br[1]).replace(/^M\.\s*/, '') };
+    // ALL-CAPS group clients: "GM FINANCIAL CHILE (3)…", "WD CONSEILS (1)…"
+    var gc = c2.match(/^([A-Z][A-Z0-9\s'.&\-]{3,}[A-Z0-9])(?=\s*[\(\d]|\s*$)/);
+    if (gc) return { tok: 'OTHER', label: gc[1].trim() };
     return { tok: '', label: '' };
   }
 
@@ -297,7 +301,7 @@
       client: isACA ? 'ACA ETIC' : client.label,
       greeteur: client.tok === 'AGENCY' ? '' : greeterInfo.name,
       greeteurPhone: client.tok === 'AGENCY' ? '' : greeterInfo.phone,
-      contactPhone: contactPhoneFrom(row.vn),
+      contactPhone: '',  // filled by enrichMissionsWithPhones (full-text search, avoids band-bleed)
       pax: paxFromColumn(row.c2),
       prebooking: 'PRÉ-BOOKING',
       lieuDepose: isService ? '' : lieuFor(type, row.itin),
