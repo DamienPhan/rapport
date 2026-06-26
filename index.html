@@ -424,7 +424,7 @@ let defaults = {
   probleme: 'Non',
   porteurs: '1',
   satisfaction: 'Excellente',
-  bagStandard: '0',
+  bagStandard: '1',
   bagHorsFormat: '0',
   bagCage: '0'
 };
@@ -441,10 +441,10 @@ function emptyMission(){
     lieuRencontreAutre: defaults.lieuRencontreAutre,
     lieuDepose: 'AUTO_CHECKIN',
     lieuDeposeAutre: defaults.lieuDeposeAutre,
-    probleme: defaults.probleme,
+    probleme: '',
     porteurs: defaults.porteurs,
     satisfaction: defaults.satisfaction,
-    bagStandard: defaults.bagStandard,
+    bagStandard: '1',
     bagHorsFormat: defaults.bagHorsFormat,
     bagCage: defaults.bagCage,
     sortTime: 9999,
@@ -1305,8 +1305,8 @@ function renderMission(m, idx){
       <div class="grid">
         <div class="field"><label>Booking #</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
         <div class="field"><label>Date</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
-        <div class="field full"><label>Client</label><input id="${fieldId(idx,'client')}" value="${m.client}"></div>
-        <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="ex: Linda.K">
+        <div class="field full"><label>Client</label><input id="${fieldId(idx,'client')}" value="${m.client}" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="ex: Linda.K" oninput="this.value=this.value.toUpperCase()">
         ${m.greeteurPhone ? `<div class="tel-row"><a href="tel:${m.greeteurPhone}" class="tel-chip">📞 ${m.greeteurPhone}</a></div>` : ''}
         </div>
         ${m.contactPhone ? `<div class="field full"><label>Contact chauffeur</label><div class="tel-row"><a href="tel:${m.contactPhone}" class="tel-chip">📞 ${m.contactPhone}</a></div></div>` : ''}
@@ -1324,8 +1324,8 @@ function renderMission(m, idx){
             <option value="ARR" ${m.type==='ARR'?'selected':''}>ARR</option>
           </select>
         </div>
-        <div class="field"><label>Vol - code IATA</label><input id="${fieldId(idx,'vol')}" value="${m.vol}"></div>
-        <div class="field"><label>Terminal</label><input id="${fieldId(idx,'terminal')}" value="${m.terminal}"></div>
+        <div class="field"><label>Vol - code IATA</label><input id="${fieldId(idx,'vol')}" value="${m.vol}" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="field"><label>Terminal</label><input id="${fieldId(idx,'terminal')}" value="${m.terminal}" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')"></div>
         <div class="field"><label>Nombre de passagers</label><input id="${fieldId(idx,'pax')}" value="${m.pax}" inputmode="numeric"></div>
       </div>
 
