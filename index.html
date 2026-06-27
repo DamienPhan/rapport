@@ -169,6 +169,20 @@
     padding:0;
     opacity:.8;
   }
+  .mission-head .btn-noshow{
+    background:#c0392b;
+    border:1px solid #c0392b;
+    color:#fff;
+    font-size:.68rem;
+    font-weight:700;
+    letter-spacing:.04em;
+    cursor:pointer;
+    line-height:1;
+    padding:5px 9px;
+    border-radius:6px;
+    text-transform:uppercase;
+  }
+  .mission-head .btn-noshow:active{background:#a52f22;border-color:#a52f22;}
   .mission-body{padding:12px 14px;}
   .grid{
     display:grid;
@@ -239,6 +253,11 @@
     transition:opacity .2s;
   }
   .copy-feedback.show{opacity:1;}
+  .copy-feedback.err{color:#c0392b;}
+  input.field-error, textarea.field-error{
+    border-color:#c0392b !important;
+    background:#fdf0ee;
+  }
   .empty{
     text-align:center;
     color:var(--muted);
@@ -1299,6 +1318,7 @@ function renderMission(m, idx){
     <div class="mission-head">
       <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
       <div class="right">
+        <button class="btn-noshow" onclick="markNoShow(${idx})" title="Marquer comme NO SHOW">NO SHOW</button>
         <span class="badge">${m.type || '—'}</span>
         <button class="del" onclick="removeMission(${idx})" title="Supprimer">✕</button>
       </div>
@@ -1368,6 +1388,7 @@ function renderMission(m, idx){
             <option ${m.lieuRencontre==='Loueurs'?'selected':''}>Loueurs</option>
             <option ${m.lieuRencontre==='Vol privé'?'selected':''}>Vol privé</option>
             <option value="Autre" ${m.lieuRencontre==='Autre'?'selected':''}>Autre...</option>
+            <option ${m.lieuRencontre==='N/A'?'selected':''}>N/A</option>
           </select>
           <input class="autre-input" id="${fieldId(idx,'lieuRencontreAutre')}" placeholder="Précise le lieu" value="${m.lieuRencontreAutre||''}" style="display:${m.lieuRencontre==='Autre'?'block':'none'}">
         </div>
@@ -1383,6 +1404,7 @@ function renderMission(m, idx){
             <option ${m.lieuDepose==='Loueurs'?'selected':''}>Loueurs</option>
             <option ${m.lieuDepose==='Vol privé'?'selected':''}>Vol privé</option>
             <option value="Autre" ${m.lieuDepose==='Autre'?'selected':''}>Autre...</option>
+            <option ${m.lieuDepose==='N/A'?'selected':''}>N/A</option>
           </select>
           <input class="autre-input" id="${fieldId(idx,'lieuDeposeAutre')}" placeholder="Précise le lieu" value="${m.lieuDeposeAutre||''}" style="display:${m.lieuDepose==='Autre'?'block':'none'}">
         </div>
@@ -1397,7 +1419,7 @@ function renderMission(m, idx){
             <option ${m.satisfaction==='Bonne'?'selected':''}>Bonne</option>
             <option ${m.satisfaction==='Moyenne'?'selected':''}>Moyenne</option>
             <option ${m.satisfaction==='Mauvaise'?'selected':''}>Mauvaise</option>
-          </select>
+            <option ${m.satisfaction==='N/A'?'selected':''}>N/A</option>
           </select>
         </div>
       </div>
@@ -1439,31 +1461,53 @@ function syncAll(){
 // Restaure automatiquement le porteur, le texte collé et les missions au
 // rechargement. Les données d'un autre jour sont purgées automatiquement.
 const STORE_KEY = 'rapports_missions_state_v1';
+const STORE_DAYS = 3; // nombre de jours de sessions conservés
 function todayKey(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+// Charge l'anneau { "YYYY-MM-DD": {state} } depuis localStorage.
+function loadStore(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return {};
+    const parsed = JSON.parse(raw);
+    // Rétrocompat : ancien format { day, missions, ... } à plat
+    if(parsed && parsed.day && !parsed.days){ return { [parsed.day]: parsed }; }
+    return (parsed && parsed.days) ? parsed.days : {};
+  }catch(e){ return {}; }
+}
+// Purge les jours au-delà de STORE_DAYS (les plus récents conservés).
+function pruneStore(store){
+  const keys = Object.keys(store).sort().reverse();
+  keys.slice(STORE_DAYS).forEach(k => delete store[k]);
+  return store;
 }
 function saveState(){
   try{
     syncAll();
     const sel = document.getElementById('porterSelect');
-    const state = {
-      day: todayKey(),
+    const day = todayKey();
+    const store = loadStore();
+    store[day] = {
+      day,
       porterSelect: sel ? sel.value : '',
       porterCustom: (document.getElementById('porterCustom')||{}).value || '',
       planning: (document.getElementById('planningInput')||{}).value || '',
       missions: missions
     };
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    pruneStore(store);
+    localStorage.setItem(STORE_KEY, JSON.stringify({ days: store }));
   }catch(e){ /* stockage indisponible : on continue sans planter */ }
 }
 function restoreState(){
   try{
-    const raw = localStorage.getItem(STORE_KEY);
-    if(!raw) return false;
-    const state = JSON.parse(raw);
-    // purge si les données ne sont pas d'aujourd'hui
-    if(!state || state.day !== todayKey()){ localStorage.removeItem(STORE_KEY); return false; }
+    const store = pruneStore(loadStore());
+    // Restaure la session la plus récente disponible (aujourd'hui en priorité, sinon la veille…)
+    const keys = Object.keys(store).sort().reverse();
+    if(!keys.length){ return false; }
+    const state = store[keys[0]];
+    if(!state){ return false; }
     const sel = document.getElementById('porterSelect');
     if(sel && state.porterSelect){ sel.value = state.porterSelect; togglePorterCustom(); }
     if(state.porterCustom){ const pc=document.getElementById('porterCustom'); if(pc) pc.value = state.porterCustom; }
@@ -1477,7 +1521,13 @@ function restoreState(){
   return false;
 }
 function clearState(){
-  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+  try{
+    // Efface uniquement la session du jour ; conserve les jours précédents
+    const store = loadStore();
+    delete store[todayKey()];
+    if(Object.keys(store).length){ localStorage.setItem(STORE_KEY, JSON.stringify({ days: store })); }
+    else { localStorage.removeItem(STORE_KEY); }
+  }catch(e){}
   missions = [];
   const pi=document.getElementById('planningInput'); if(pi) pi.value='';
   render();
@@ -1523,6 +1573,28 @@ function removeMission(idx){
   saveState();
 }
 
+function markNoShow(idx){
+  pushUndo();
+  syncAll(); // capture les éditions manuelles avant transformation
+  const m = missions[idx];
+  if(!m) return;
+  // Conserve l'identité : booking, date, client, greeteur, prebooking, type, vol, terminal
+  // Met le reste à N/A et probleme = NO SHOW
+  m.pax = 'N/A';
+  m.bagStandard = 'N/A';
+  m.bagHorsFormat = 'N/A';
+  m.bagCage = 'N/A';
+  m.detaxe = 'N/A';
+  m.lieuRencontre = 'N/A';
+  m.lieuRencontreAutre = '';
+  m.lieuDepose = 'N/A';
+  m.lieuDeposeAutre = '';
+  m.satisfaction = 'N/A';
+  m.probleme = 'NO SHOW';
+  render();
+  saveState();
+}
+
 function toggleAutre(idx, field){
   const sel = document.getElementById(fieldId(idx, field));
   const inp = document.getElementById(fieldId(idx, field+'Autre'));
@@ -1553,11 +1625,42 @@ function resolveLieu(idx, field){
   return selVal;
 }
 
+function validateMission(idx){
+  // Champs obligatoires selon le type. Retourne la liste des champs manquants.
+  const type = val(idx,'type');
+  const required = ['booking', 'pax'];
+  if(type === 'ARR' || type === 'DEP'){ required.push('vol', 'terminal'); }
+  const missing = [];
+  required.forEach(f => {
+    const el = document.getElementById(fieldId(idx, f));
+    if(!el) return;
+    const empty = !String(el.value).trim();
+    el.classList.toggle('field-error', empty);
+    if(empty) missing.push(f);
+  });
+  return missing;
+}
+
 function generateReport(idx){
+  const missing = validateMission(idx);
+  if(missing.length){
+    const labels = { booking:'Booking #', vol:'Vol', terminal:'Terminal', pax:'Nombre de passagers' };
+    const list = missing.map(f => labels[f] || f).join(', ');
+    const fb = document.getElementById(fieldId(idx,'feedback'));
+    if(fb){
+      fb.textContent = 'Champs manquants : ' + list;
+      fb.classList.add('err', 'show');
+      setTimeout(()=>fb.classList.remove('show'), 3500);
+    }
+    // Focus le premier champ manquant pour correction immédiate
+    const first = document.getElementById(fieldId(idx, missing[0]));
+    if(first) first.focus();
+    return;
+  }
   const _hf = val(idx,'bagHorsFormat'); const _ca = val(idx,'bagCage');
   const _hfN = parseInt(_hf)||0; const _caN = parseInt(_ca)||0;
-  const hfDisp = _hfN > 0 ? String(_hfN) : 'n/a';
-  const caDisp = _caN > 0 ? String(_caN) : 'n/a';
+  const hfDisp = _hfN > 0 ? String(_hfN) : 'N/A';
+  const caDisp = _caN > 0 ? String(_caN) : 'N/A';
   const total = (parseInt(val(idx,'bagStandard'))||0) + _hfN + _caN;
   const lieuRencontre = resolveLieu(idx,'lieuRencontre');
   const lieuDepose = resolveLieu(idx,'lieuDepose');
@@ -1619,19 +1722,52 @@ Satisfaction client : ${val(idx,'satisfaction')}`;
 
 async function copyReport(idx){
   const text = document.getElementById(fieldId(idx,'pre')).textContent;
-  try{
-    await navigator.clipboard.writeText(text);
-  }catch(e){
+  let ok = false;
+
+  if(navigator.clipboard && window.isSecureContext){
+    try{
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    }catch(e){ ok = false; }
+  }
+
+  if(!ok){
+    // iOS Safari fallback: textarea must be visible, non-readonly, and selected via range
     const ta = document.createElement('textarea');
     ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '0';
+    ta.style.opacity = '0';
     document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
+    const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent);
+    if(isIOS){
+      const range = document.createRange();
+      range.selectNodeContents(ta);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      ta.setSelectionRange(0, text.length);
+    }else{
+      ta.select();
+    }
+    try{ ok = document.execCommand('copy'); }catch(e){ ok = false; }
     document.body.removeChild(ta);
   }
+
   const fb = document.getElementById(fieldId(idx,'feedback'));
-  fb.classList.add('show');
-  setTimeout(()=>fb.classList.remove('show'), 1500);
+  if(ok){
+    fb.textContent = 'Copié ✓';
+    fb.classList.remove('err');
+    fb.classList.add('show');
+    setTimeout(()=>fb.classList.remove('show'), 1500);
+  }else{
+    fb.textContent = 'Échec — sélectionne et copie à la main';
+    fb.classList.add('err', 'show');
+    setTimeout(()=>{ fb.classList.remove('show'); }, 3000);
+  }
+  return ok;
 }
 
 document.getElementById('extractBtn').addEventListener('click', () => {
@@ -1655,7 +1791,12 @@ restoreState();
 refreshRosterUI();
 let _saveTimer=null;
 function saveStateDebounced(){ clearTimeout(_saveTimer); _saveTimer=setTimeout(saveState, 600); }
-document.addEventListener('input', (e)=>{ if(e.target.closest && (e.target.closest('#missionsContainer')||e.target.id==='planningInput'||e.target.id==='porterCustom')) saveStateDebounced(); });
+document.addEventListener('input', (e)=>{
+  if(e.target.classList && e.target.classList.contains('field-error') && String(e.target.value).trim()){
+    e.target.classList.remove('field-error');
+  }
+  if(e.target.closest && (e.target.closest('#missionsContainer')||e.target.id==='planningInput'||e.target.id==='porterCustom')) saveStateDebounced();
+});
 document.addEventListener('change', ()=>{ saveStateDebounced(); });
 window.addEventListener('beforeunload', saveState);
 window.addEventListener('pagehide', saveState);
