@@ -467,6 +467,9 @@ function applyLieuDefaults(m){
   } else if(m.type === 'DEP'){
     m.lieuRencontre = 'Dépose minute';
     m.lieuDepose = 'AUTO_CHECKIN';
+  } else if(m.type === 'TRS'){
+    m.lieuRencontre = '';
+    m.lieuDepose = '';
   }
   return m;
 }
@@ -1322,6 +1325,7 @@ function renderMission(m, idx){
           <select id="${fieldId(idx,'type')}">
             <option value="DEP" ${m.type==='DEP'?'selected':''}>DEP</option>
             <option value="ARR" ${m.type==='ARR'?'selected':''}>ARR</option>
+            <option value="TRS" ${m.type==='TRS'?'selected':''}>TRS</option>
           </select>
         </div>
         <div class="field"><label>Vol - code IATA</label><input id="${fieldId(idx,'vol')}" value="${m.vol}" oninput="this.value=this.value.toUpperCase()"></div>
