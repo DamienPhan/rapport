@@ -33,19 +33,58 @@ tourner dans le navigateur.
 
 ## 2. Fichiers du dépôt
 
-| Fichier | Rôle |
-|---|---|
-| `index.html` | Application complète : UI, état, rendu, génération de rapport, **moteur d'extraction copier-coller**, référentiels auto-alimentés, intégration arrivées en direct |
-| `parser.js` | **Moteur d'extraction PDF** par reconstruction de table via coordonnées spatiales (pdf.js) |
-| `README.md` | Documentation utilisateur |
-| `CLAUDE.md` | Ce fichier — contexte technique pour reprise |
+**Architecture modulaire (v2)** — ES modules natifs, zéro build. La logique
+métier (`core/`, `store/`) est PURE (aucun accès DOM) et réutilisable telle
+quelle lors d'un futur passage natif. Seule `ui/app.js` touche le DOM.
 
-Aucun backend n'est nécessaire. `pdf.js` est chargé depuis un CDN dans
-`index.html` (`<script src="parser.js">` est inclus juste après).
+```
+index.html                  Coquille : structure + <link> CSS + <script type=module>
+src/
+├── config/nce-wellcom.js   ⭐ TOUTE la spécificité du site (clé de l'upscaling)
+├── core/                   Logique métier PURE (zéro DOM)
+│   ├── parser-pdf.js        Extraction PDF par coordonnées (moteur principal)
+│   ├── parser-text.js       Extraction copier-coller (moteur de repli)
+│   ├── phone.js             normalizePhone, extractClientPhone
+│   ├── mission.js           createMission, applyPlaceDefaults, markNoShow, validateMission…
+│   ├── report.js            generateReportText, resolvePlace
+│   └── enrich.js            enrichWithPhones (greeter/chauffeur depuis texte complet)
+├── store/session.js        Persistance localStorage abstraite (createSessionStore)
+├── ui/app.js               SEULE couche DOM : rendu, événements, handlers exposés sur window
+└── styles/main.css         Styles (DA Well'Com Air)
+tests/
+├── parser.test.js          Tests unitaires (core) + intégration (PDF de référence)
+└── fixtures/*.pdf          Plannings de référence
+package.json                scripts : `npm test`, `npm run serve`
+```
+
+**Correspondance avec l'ancienne v1 (monolithe)** : l'ancien `parser.js`
+(IIFE globale `MissionParser`) est devenu `src/core/parser-pdf.js` (module ES
+piloté par config). L'ancien `index.html` contenait tout (UI + moteur texte +
+état) ; ce code est désormais réparti entre `core/`, `store/` et `ui/app.js`.
+
+**Frontière d'architecture à respecter absolument** : ne JAMAIS ajouter
+`document.`/`window.`/`localStorage.` dans `core/` ou `store/`. Si un module
+core a besoin d'une donnée du DOM, l'UI la lit et la passe en argument. Les
+handlers appelés en `onclick=`/`onchange=` inline doivent être exposés via
+`window.X = X` à la fin de `ui/app.js` (sinon invisibles en scope module).
+
+Aucun backend. `pdf.js` est chargé depuis un CDN. Les modules ES exigent
+`http://` (servir via `npm run serve`), pas `file://`.
 
 ---
 
 ## 3. Architecture — les deux moteurs d'extraction
+
+> **Note de nommage (refactoring v2).** Les sections 3 à 5 décrivent la
+> *logique* d'extraction, inchangée par le passage en modules. Les anciens
+> noms y subsistent ; correspondance :
+> `parser.js` → `src/core/parser-pdf.js` · `MissionParser.fromPages()` →
+> `missionsForPorter(pages, porter, cfg)` · `emptyMission()` →
+> `createMission()` · `applyLieuDefaults()` → `applyPlaceDefaults(m, cfg.places)` ·
+> `enrichMissionsWithPhones()` → `enrichWithPhones(missions, text, cfg)` ·
+> `saveDefaults()` → `syncDefaults()` · le moteur copier-coller (jadis dans
+> `index.html`) → `src/core/parser-text.js`. Toutes les valeurs jadis en dur
+> dans le parser PDF vivent maintenant dans `src/config/nce-wellcom.js`.
 
 C'est le cœur du projet et la source de la quasi-totalité des itérations
 passées. Il y a **deux chemins d'ingestion totalement indépendants**, avec
@@ -468,11 +507,16 @@ un bug déjà corrigé) :
 
 ## 6. Méthode de validation (à reproduire pour toute modification)
 
-Il n'y a pas de suite de tests automatisée committée dans le dépôt — la
-validation se fait par script ad hoc à chaque session, en comparant la
-sortie du parseur à une vérité terrain extraite indépendamment du PDF
-(`fitz`/PyMuPDF en Python, texte propre par bloc de mission, jamais le
-même chemin de code que le parseur testé).
+**Depuis la v2, une suite de tests est committée** : `tests/parser.test.js`,
+lancée par `npm test`. Elle combine des tests unitaires sur le core pur
+(téléphone, validation, NO SHOW, rapport, lieux) et des tests d'intégration
+sur les PDF de référence dans `tests/fixtures/`. À lancer après CHAQUE
+changement touchant `src/core/parser-*.js`, `src/config/` ou `enrich.js`.
+
+Pour une validation plus poussée (nouveau cas litigieux), garder le réflexe
+historique : comparer la sortie du parseur à une vérité terrain extraite
+indépendamment du PDF (`fitz`/PyMuPDF en Python, texte propre par bloc de
+mission, jamais le même chemin de code que le parseur testé).
 
 **Plannings de référence utilisés jusqu'ici** (à demander à l'utilisateur
 s'ils ne sont plus disponibles, ne pas réinventer une vérité terrain sans
@@ -487,25 +531,26 @@ PDF source) :
   porteurs
 - `Mission-2026-06-22_22_11.pdf` (23/06) — 6 pages, contient `BA 328`
   (vol à espace), Monaco Prestige Limousines, SP Hinduja Bank (clients
-  agence), valide l'extraction client/pax/contact agence
+  agence), valide l'extraction client/pax/contact agence. **Fixture de test.**
 - `Mission-2026-06-23_22_02.pdf` (24/06) — 8 pages, contient
   `GM FINANCIAL CHILE` / `WD CONSEILS` (groupes ALL-CAPS), U21733
   (`Terminal 19:00:00` piège terminal), greeter Antoine au numéro
-  fragmenté sur 2 lignes, faux positif contact Nathan D — valide les fixes
-  14/15/12
+  fragmenté sur 2 lignes, faux positif contact Nathan D.
+- `planning-30.pdf` (30/06) — contient `MY FRENCH RIVIERA` et `G-OPS`
+  (téléphone client dans la colonne client). **Fixture de test.**
 
 **Protocole minimal avant de livrer un changement touchant
 extraction/attribution** :
 
-1. Construire la vérité terrain (booking, vol, terminal, type, porteur,
-   greeter) depuis le texte PyMuPDF propre (pas depuis le parseur).
-2. Comparer la sortie de `parser.js` (chemin PDF) sur **tous les
-   porteurs** du planning, pas seulement Damien P.
-3. Comparer la sortie du moteur copier-coller sur le texte tel que
-   l'utilisateur l'a réellement collé (pas un texte reconstruit à la
-   main — le désordre exact du collage est ce qui révèle les bugs).
-4. Zéro régression sur les plannings de référence précédents avant de
-   livrer.
+1. `npm test` doit passer au vert.
+2. Si le changement touche la logique, construire la vérité terrain depuis
+   le texte PyMuPDF propre (pas depuis le parseur) et comparer la sortie de
+   `parser-pdf.js` sur **tous les porteurs**, pas seulement Damien P.
+3. Comparer le moteur copier-coller sur le texte tel que l'utilisateur l'a
+   réellement collé (le désordre exact du collage révèle les bugs).
+4. Lors du refactoring v2, la non-régression a été prouvée en comparant
+   octet par octet la sortie du nouveau `parser-pdf.js` à l'ancien
+   `parser.js` : **51 comparaisons (porteur×fichier), 0 différence**.
 
 ---
 
@@ -516,24 +561,61 @@ pas un oubli :
 
 - **Sécurité `localStorage`** : PII en clair, pas de chiffrement, pas
   d'expiration. Accepté — usage interne uniquement.
-- **Deux moteurs d'extraction parallèles** (`parser.js` et
-  `extractMissionsPdfjs`/`extractMissionsCopyPaste` dans `index.html`) :
-  redondance partielle, risque de dérive entre les deux. Pas fusionnés
-  par choix — chacun est validé indépendamment à 100 %, un merge
+- **Deux moteurs d'extraction parallèles** (`core/parser-pdf.js` et
+  `core/parser-text.js`) : redondance partielle, risque de dérive entre les
+  deux. Pas fusionnés par choix — chacun est validé indépendamment, un merge
   introduirait un risque de régression sans gain fonctionnel immédiat.
-- **Géométrie de colonnes codée en dur** (`DEFAULT_CENTERS` dans
-  `parser.js`) : repli uniquement, la détection dynamique d'en-tête
-  (`detectColumns`) absorbe la plupart des variations. À surveiller si
-  TCPDF change radicalement de gabarit.
-- **Dépendance pdf.js via CDN sans SRI** : pas de vérification
-  d'intégrité. Accepté avec la sécurité globale.
+- **`parser-text.js` n'est PAS piloté par la config** : il contient encore en
+  dur les tokens de clients (`ACA`, `Monaco Mediax`, `WELL'COM`), les
+  libellés et une liste de villes. Le rendre config-driven imposerait de
+  réécrire son heuristique de ~600 lignes (haut risque de régression) pour un
+  moteur qui n'est que le repli. **Conséquence pour l'upscaling** : sur un
+  nouveau site, `parser-pdf.js` fonctionne immédiatement via config ;
+  `parser-text.js` nécessiterait d'adapter ses constantes. Comme le PDF est
+  le chemin recommandé et fiable, c'est accepté. (Audit v2.)
+- **Géométrie de colonnes codée en dur** : `defaultCenters` dans
+  `config/nce-wellcom.js` est un repli ; la détection dynamique d'en-tête
+  (`detectColumns`) absorbe la plupart des variations. À surveiller si TCPDF
+  change radicalement de gabarit.
+- **Dépendance pdf.js via CDN sans SRI** : pas de vérification d'intégrité.
 - **`contactPhone` dépend du texte complet, pas des coordonnées** : depuis
   le retrait de `contactPhoneFrom` du parser PDF, le numéro chauffeur est
-  extrait par `enrichMissionsWithPhones` sur le texte aplati. Fiable sur les
+  extrait par `enrichWithPhones` sur le texte aplati. Fiable sur les
   plannings testés mais sensible à un changement de libellé
   (`Contact Chauffeur:`) ou de mise en page agence.
 
-## 8. Direction artistique (DA Well'Com Air)
+---
+
+## 8. Upscaling vers un autre site (multi-aéroport / multi-agence)
+
+**Objectif de l'architecture v2** : pouvoir brancher un autre site ayant le
+**même format de tableau PDF** en éditant un seul fichier de config, sans
+toucher au code métier.
+
+**Procédure** :
+1. Copier `src/config/nce-wellcom.js` → `src/config/<site>.js`.
+2. Ajuster les valeurs : `site` (code aéroport, libellés), `pdfTable`
+   (en-têtes de colonnes, centres de repli, index des colonnes), `clients`
+   (motifs directs + libellés, motif de réf agence, motif groupes MAJUSCULES),
+   `noteLabels` (greeter, chauffeur), `itinerary` (motif vol/terminal),
+   `places` (règles ARR/DEP/TRS), `phone`.
+3. Dans `src/ui/app.js`, changer l'import :
+   `import { siteConfig as CFG } from '../config/<site>.js';`
+4. (Si le moteur texte est nécessaire) adapter les constantes en dur de
+   `parser-text.js` — voir dette §7.
+5. `npm test` avec une fixture du nouveau site.
+
+**Ce qui rend cela possible** : `core/parser-pdf.js` ne contient AUCUNE
+valeur propre à un site (vérifié à l'audit v2 : 0 littéral NCE/ACA/Well'Com).
+Tout passe par le paramètre `cfg`.
+
+**Passage natif (futur)** : `core/` et `store/` étant purs (aucun DOM), une
+app Capacitor ou React Native réutilise ces modules tels quels et ne réécrit
+que `ui/app.js`. C'est la raison d'être de la frontière core/ui (voir §2).
+
+---
+
+## 9. Direction artistique (DA Well'Com Air)
 
 L'UI suit la DA de Well'Com Air (service VIP aéroportuaire premium). Palette
 en variables CSS dans `:root` :

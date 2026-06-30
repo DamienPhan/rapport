@@ -1,0 +1,15 @@
+{
+  "name": "rapports-missions",
+  "version": "2.0.0",
+  "description": "Générateur de rapports de mission pour porteurs aéroport — extraction PDF par coordonnées, architecture modulaire prête pour le multi-site.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/parser.test.js",
+    "serve": "python3 -m http.server 8080"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "^3.11.174"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

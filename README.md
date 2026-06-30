@@ -1,103 +1,78 @@
 # Rapports de mission
 
-Application web mono-page pour générer rapidement les rapports de mission
-des porteurs de l'aéroport de Nice Côte d'Azur, à partir du planning PDF
-quotidien.
+Générateur de rapports de mission pour porteurs d'aéroport. Extraction
+automatique des missions depuis le PDF de planning (ou le texte collé),
+saisie assistée, génération du rapport texte prêt à copier.
 
-🔗 **App en ligne** : https://damienphan.github.io/rapport/
+Application **statique, zéro build** : ouvrable en double-clic ou servie
+telle quelle sur GitHub Pages. Architecture modulaire (ES modules natifs)
+conçue pour être réutilisée sur d'autres sites et migrée vers une app
+native (Capacitor / React Native) sans réécrire la logique métier.
 
-## Le besoin
+## Démarrage
 
-Chaque jour, un planning PDF liste toutes les missions (vols, clients,
-greeters, types de service) toutes équipes confondues. Un porteur doit en
-extraire uniquement ses propres missions et produire, pour chacune, un
-rapport texte structuré (6 sections) à coller ailleurs (tablette, app
-métier...).
+```bash
+# Servir localement (les modules ES exigent http://, pas file://)
+npm run serve        # puis http://localhost:8080
+# ou
+python3 -m http.server 8080
+```
 
-Faire ça à la main, mission par mission, est lent et source d'erreurs.
-L'app automatise l'extraction et ne laisse que la vérification/édition.
+> Ouvrir `index.html` directement en `file://` ne fonctionne pas à cause des
+> restrictions CORS sur les modules ES. Utiliser un petit serveur HTTP.
 
-## Fonctionnement en un coup d'œil
+## Tests
 
-1. Sélectionner son nom dans la liste déroulante.
-2. **Charger le PDF du jour** (mode recommandé, fiable à 100 % sur les
-   plannings testés) **ou coller le texte** du planning (mode de repli).
-3. L'app affiche une carte par mission trouvée, pré-remplie : booking,
-   vol, terminal, type (arrivée/départ), client, greeter, lieux de
-   rencontre/dépose, bagages...
-4. Vérifier/corriger si besoin, puis générer le rapport de chaque mission
-   (bouton sur la carte) pour le copier ailleurs.
+```bash
+npm install          # installe pdfjs-dist (tests PDF)
+npm test             # lance tests/parser.test.js
+```
 
-Une fois un planning chargé, **changer de porteur dans la liste recharge
-automatiquement ses missions** — pas besoin de recharger le fichier.
+Les tests couvrent le core pur (téléphone, validation, NO SHOW, rapport) et
+l'intégration sur les PDF de référence (`tests/fixtures/`). À lancer après
+toute modification de `src/core/parser-*.js` ou de la config.
 
-### Deux moteurs d'extraction
+## Architecture
 
-| Mode | Méthode | Fiabilité |
-|---|---|---|
-| **Charger le PDF** | reconstruction de la table par coordonnées spatiales (x, y) via pdf.js (`parser.js`) | validée à 100 % sur tous les plannings testés, y compris les plus éclatés |
-| **Coller le texte** | heuristiques sur texte aplati, découpage par référence booking (`index.html`) | sûr (jamais de valeur fausse affichée comme certaine) mais peut tomber en saisie manuelle ("chips") sur les blocs vraiment ambigus |
+```
+src/
+├── config/nce-wellcom.js   ⭐ Toute la spécificité du site (voir Upscaling)
+├── core/                   Logique métier PURE (aucun DOM) — réutilisable natif
+│   ├── parser-pdf.js        Extraction PDF par coordonnées (moteur principal)
+│   ├── parser-text.js       Extraction copier-coller (moteur de repli)
+│   ├── phone.js             Normalisation / extraction de téléphones
+│   ├── mission.js           Modèle de mission + règles métier
+│   ├── report.js            Génération du rapport texte
+│   └── enrich.js            Renseignement des téléphones depuis le texte complet
+├── store/session.js        Persistance (localStorage, abstraite)
+├── ui/app.js               SEULE couche touchant le DOM (orchestration, rendu)
+└── styles/main.css         Styles
+```
 
-Principe non négociable des deux moteurs : **ne jamais afficher une valeur
-incertaine comme si elle était sûre**. En cas d'ambiguïté réelle (vol
-dupliqué entre deux missions différentes, nom de porteur détaché de sa
-référence par le collage...), l'app demande une sélection manuelle plutôt
-que de deviner.
+**Principe directeur** : `core/` et `store/` ne touchent jamais au DOM. Le
+jour du passage natif, seul `ui/app.js` est réécrit ; tout le reste est
+conservé tel quel.
 
-### Règles métier encodées
+## Upscaling vers un autre site
 
-- **Client** : ACA (Aéroport Nice Côte d'Azur) → booking affiché sous forme
-  `M#xxxxx` ; agences diverses → référence `[2026-xxxxxx]` ; Monaco Mediax,
-  WELL'COM AIR reconnus spécifiquement.
-- **Type de service** : Arrivée / Départ / Service (sans vol).
-- **Lieux par défaut** (appliqués une fois à l'extraction, modifiables
-  ensuite) :
-  - Arrivée → rencontre **Tapis bagage**, dépose **Parking pro**
-  - Départ → rencontre **Dépose minute**, dépose **Check-in + vol**
-- **Greeter** : détecté avec ou sans libellé explicite (`Greeter:`,
-  `GREETER :`, ou simplement `NOM +téléphone` juste après le porteur).
+Le PDF d'un autre aéroport / d'une autre agence ayant la **même structure de
+tableau** se branche en éditant un seul fichier :
 
-### Référentiels auto-alimentés
+1. Copier `src/config/nce-wellcom.js` → `src/config/<nouveau-site>.js`
+2. Ajuster : code aéroport, en-têtes de colonnes, centres de repli, motifs
+   de clients, libellés de note (greeter / chauffeur), règles de lieu.
+3. Dans `src/ui/app.js`, pointer l'import de config vers le nouveau fichier.
 
-La liste des porteurs et des greeters n'est pas figée dans le code : chaque
-planning chargé (PDF ou texte) est analysé pour en extraire automatiquement
-les nouveaux noms, qui sont mémorisés localement (`localStorage`) et
-réinjectés dans les listes déroulantes / l'autocomplétion. Un nouveau
-collègue ou un nouveau greeter apparaît donc sans mise à jour du code.
+Le moteur PDF (`parser-pdf.js`) est **entièrement piloté par la config** :
+aucune valeur propre à un site n'y figure.
 
-### Persistance locale
+⚠️ **Limite connue** : le moteur de repli `parser-text.js` contient encore
+des libellés de clients et une liste de villes en dur (héritage de son
+heuristique). Pour un nouveau site, le moteur PDF fonctionne immédiatement ;
+le moteur texte nécessiterait une adaptation de ses constantes. Comme le PDF
+est le chemin recommandé et fiable, cette limite est acceptée.
 
-- Sauvegarde automatique de la session du jour (anti-perte si l'onglet se
-  ferme, notamment sur iOS).
-- Annulation (undo) jusqu'à 20 niveaux.
-- Pas de backend : tout reste dans le navigateur de l'appareil utilisé.
+## Déploiement (GitHub Pages)
 
-## Limites connues
-
-- **Missions LIVE** (ajoutées le jour même, absentes du PDF du matin) :
-  saisie manuelle, hors périmètre de l'extraction automatique.
-- Le mode copier-coller peut tomber en saisie manuelle sur des blocs où la
-  mise en page a réellement détruit l'association ligne ↔ mission ; charger
-  le PDF directement résout ces cas.
-
-## Déploiement
-
-Application statique, aucun build. Pour mettre à jour le site :
-
-1. Remplacer `index.html` et/ou `parser.js` à la racine du dépôt
-   `damienphan/Rapport_missions`.
-2. GitHub Pages republie automatiquement.
-
-Dépendance externe : [pdf.js](https://mozilla.github.io/pdf.js/) chargé
-depuis un CDN (pas de build, pas d'installation).
-
-## Pour aller plus loin
-
-L'interface reprend la direction artistique de **Well'Com Air** (navy
-midnight profond, or champagne, ivoire chaud, titrage en capitales
-espacées) pour une identité premium cohérente avec le service VIP.
-
-Voir [`CLAUDE.md`](./CLAUDE.md) pour le contexte technique complet
-(architecture détaillée, géométrie du parsing PDF, historique des
-décisions, pièges connus) — destiné à toute IA ou développeur reprenant
-le projet.
+Pousser le contenu du dossier tel quel. Aucune étape de build. `pdf.js` est
+chargé depuis un CDN dans `index.html`.
