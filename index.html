@@ -1442,6 +1442,7 @@ function render(){
   if(missions.length === 0){
     html += '<div class="empty">Aucune mission pour l\'instant. Extrais le planning ou ajoute une mission manuelle.</div>';
   } else {
+    html += '<button class="btn full-ghost" onclick="addManualMission()" style="margin-bottom:10px">+ Ajouter une mission manuelle</button>';
     html += missions.map((m,i)=>renderMission(m,i)).join('');
   }
   html += '<button class="btn full-ghost" onclick="addManualMission()">+ Ajouter une mission manuelle</button>';
@@ -1560,7 +1561,7 @@ function addManualMission(){
   const m = emptyMission();
   m.prebooking = 'LIVE';
   m.booking = '2026-';
-  missions.push(m);
+  missions.unshift(m);
   render();
   saveState();
 }

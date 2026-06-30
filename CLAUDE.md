@@ -35,14 +35,13 @@ tourner dans le navigateur.
 
 | Fichier | Rôle |
 |---|---|
-| `index.html` | Application complète : UI, état, rendu, génération de rapport, **moteur d'extraction copier-coller**, référentiels auto-alimentés |
+| `index.html` | Application complète : UI, état, rendu, génération de rapport, **moteur d'extraction copier-coller**, référentiels auto-alimentés, intégration arrivées en direct |
 | `parser.js` | **Moteur d'extraction PDF** par reconstruction de table via coordonnées spatiales (pdf.js) |
 | `README.md` | Documentation utilisateur |
 | `CLAUDE.md` | Ce fichier — contexte technique pour reprise |
 
-Aucun autre fichier n'est nécessaire au déploiement. `pdf.js` est chargé
-depuis un CDN dans `index.html` (`<script src="parser.js">` est inclus
-juste après).
+Aucun backend n'est nécessaire. `pdf.js` est chargé depuis un CDN dans
+`index.html` (`<script src="parser.js">` est inclus juste après).
 
 ---
 
@@ -121,15 +120,43 @@ absorbe les petites variations de mise en page entre PDF.
 - **Terminal** : cherché *après* le vol dans l'itinéraire (pour éviter de
   capturer un faux terminal dans le segment de prise en charge avant le
   vol). Doit être `\d{1,2}` ou une lettre seule (`B`) ; les noms de
-  villes (Naples, Sofia, London, Budapest) sont exclus.
-- **Greeter** (`greeterFromLines`) : d'abord libellé explicite (insensible
-  à la casse — `GREETER:`, `Greeter :`, `greeter::`...), sinon repli sur
-  un nom suivi d'un téléphone sans libellé (`NOM +33...`), borné au
-  porteur suivant pour ne jamais déborder sur la mission voisine.
+  villes (Naples, Sofia, London, Budapest) sont exclus. **Lookahead
+  `(?![\d:])` ajouté** pour ne pas capturer un horodatage comme terminal
+  (`Terminal 19:00:00` ne doit pas donner terminal `19` — cas du vol
+  U21733 sur le planning du 24/06).
+- **Greeter** (`greeterInfoFromLines`, anciennement `greeterFromLines`) :
+  retourne désormais un objet `{name, phone}`. D'abord libellé explicite
+  (insensible à la casse — `GREETER:`, `Greeter :`, `greeter::`...), sinon
+  repli sur un nom suivi d'un téléphone sans libellé (`NOM +33...`), borné
+  au porteur suivant pour ne jamais déborder sur la mission voisine. Le
+  téléphone du greeter est extrait inline ou sur la ligne suivante.
+- **Téléphones** (`phoneNorm`, `contactPhoneFrom`, et
+  `enrichMissionsWithPhones` côté `index.html`) : trois numéros peuvent
+  apparaître par mission — le greeter (`greeteurPhone`) et le chauffeur
+  (`contactPhone`, libellé `Contact Chauffeur:` sur les missions agence).
+  `phoneNorm` exige un numéro commençant par `+` ou `0` et ≥ 9 chiffres
+  (rejette les faux positifs issus d'horodatages, ex. `20486466` formé par
+  la fusion `14:20` + `48 64 66`). **Décision importante** :
+  `contactPhoneFrom` a été **retiré de `rowToFields` dans `parser.js`** car
+  la note « Contact Chauffeur » déborde fréquemment de la bande Y vers la
+  mission voisine (faux positif Nathan D héritant du numéro de Bastien D
+  sur le 24/06). Les contacts sont désormais extraits **exclusivement** par
+  `enrichMissionsWithPhones` côté `index.html`, depuis le texte complet
+  avec une fenêtre bornée au prochain booking (et un saut du numéro de
+  planification qui suit immédiatement la réf agence). Les numéros
+  fragmentés sur deux lignes (`+33 6 47\n48 64 66`) sont gérés en aplatissant
+  ~200 caractères après le libellé.
 - **Client/Booking** : ACA → `client.tok === 'ACA'`, booking = `M#xxxxx` ;
-  agence → booking = référence `[2026-xxxxxx]`, client = nom de l'agence ;
-  greeter vide pour les missions agence (pas de greeter, juste un
-  chauffeur).
+  agence → booking = référence `[2026-xxxxxx]`, client = nom du client
+  (extrait via `M. NOM +téléphone`, pattern le plus fiable, avec repli sur
+  `NOM [2026-xxxxxx]`) ; greeter vide pour les missions agence (pas de
+  greeter, juste un chauffeur). **Clients groupe ALL-CAPS** (ex.
+  `GM FINANCIAL CHILE`, `WD CONSEILS`) reconnus par un fallback regex
+  `^[A-Z][A-Z0-9\s'.&-]{3,}[A-Z0-9]` avec `tok = 'OTHER'` (greeter extrait
+  normalement, contrairement aux missions agence).
+- **Pax** : recherché via `(N)` à partir de la position de la réf booking
+  dans le texte complet (jamais autour de la position du porteur, qui
+  capturerait le `(N)` de la mission précédente).
 
 **Validation empirique** : testé sur 4 plannings réels distincts
 (19/06, 20/06 x2, 21/06), **toujours 100 % des missions exactes** sur
@@ -203,18 +230,30 @@ déjà régressé plusieurs fois pendant le développement.
 
 ```js
 {
-  booking, date, vol, terminal, type,       // ARR | DEP | Service
-  client, greeteur, pax,
+  booking, date, vol, terminal, type,       // ARR | DEP | TRS | Service
+  client, greeteur, greeteurPhone, contactPhone, pax,
   prebooking,                                // PRÉ-BOOKING | LIVE
-  detaxe,                                    // Oui | Non
+  detaxe,                                    // Oui | Non | N/A
   lieuRencontre, lieuRencontreAutre,
-  lieuDepose, lieuDeposeAutre,               // 'AUTO_CHECKIN' = calculé depuis le vol
-  probleme, porteurs, satisfaction,
-  bagStandard, bagHorsFormat, bagCage,      // défaut '0' chacun ; hf/cage = inputs numériques libres (peut être élevé)
+  lieuDepose, lieuDeposeAutre,               // 'AUTO_CHECKIN' = calculé depuis le vol ; 'N/A' possible
+  probleme, porteurs, satisfaction,          // satisfaction : ... | N/A
+  bagStandard, bagHorsFormat, bagCage,      // bagStandard défaut '1' ; hf/cage défaut '0', inputs numériques libres
   sortTime,                                  // pour le tri chronologique ET l'heure affichée dans la bannière (fmtTime)
   bookingOptions, flightOptions              // peuplés uniquement si "chips"
 }
 ```
+
+**Champs ajoutés récemment** : `greeteurPhone`, `contactPhone` (téléphones
+cliquables, §3.1). Le type accepte désormais **`TRS`** (transit terminal à
+terminal) en plus de ARR/DEP/Service.
+
+**Défauts hardcodés dans `emptyMission()`, PAS hérités de `defaults`** :
+`bagStandard` vaut **`'1'`** et `probleme` vaut **`''`**. C'est volontaire —
+`defaults` est un objet mutable que `syncAll` met à jour avec la dernière
+saisie ; si ces champs lisaient `defaults`, chaque nouvelle mission extraite
+hériterait de la valeur de la mission précédente (bug réel signalé : « le
+nombre de bagages garde le dernier qu'on avait mis »). Les missions extraites
+du PDF n'indiquent jamais le nombre de bagages réel, d'où le défaut à 1.
 
 ### Règles de routage par défaut (`applyLieuDefaults`, appliqué une fois à
 l'extraction, jamais réécrasé par l'undo ou l'édition manuelle)
@@ -223,6 +262,7 @@ l'extraction, jamais réécrasé par l'undo ou l'édition manuelle)
 |---|---|---|
 | Arrivée (ARR) | Tapis bagage | Parking pro |
 | Départ (DEP) | Dépose minute | Check-in + vol (`AUTO_CHECKIN`) |
+| Transit (TRS) | *(vide)* | *(vide)* |
 
 Décision métier explicite de Damien (pas une déduction du planning) : ces
 valeurs sont volontairement déterministes par type, indépendamment de ce
@@ -238,19 +278,44 @@ manuellement sur la carte.
   de l'agence/personne.
 - **Monaco Mediax**, **WELL'COM AIR** : reconnus par motif dédié, mêmes
   règles que ACA pour le format mais sans M#.
+- **Clients groupe ALL-CAPS** (`GM FINANCIAL CHILE`, `WD CONSEILS`...) :
+  fallback regex sur un nom entièrement capitalisé, `tok = 'OTHER'`. À la
+  différence des missions agence `[2026-xxxxxx]`, le greeter est extrait
+  normalement.
 - Missions « Service » (sans vol, ex. dépose simple) : type forcé à
   `Service`, vol/terminal vides.
 
 ### Conventions de saisie / rapport (décisions Damien)
 
-- **Bagages** : `bagStandard`, `bagHorsFormat`, `bagCage` valent **0 par
-  défaut**. Hors-format et cage animal sont des **inputs numériques libres**
-  (il peut y en avoir beaucoup — l'ancien select 0–5/N-A était trop limité).
-  Dans le rapport généré, hors-format/cage affichent **`n/a` si vide ou 0**,
-  sinon le nombre ; le total = standard + hors-format + cage (valeurs nulles
-  comptées comme 0).
+- **Bagages** : `bagStandard` vaut **1 par défaut** (les missions extraites
+  n'indiquent jamais le nombre réel) ; `bagHorsFormat` et `bagCage` valent
+  0. Hors-format et cage animal sont des **inputs numériques libres** (il
+  peut y en avoir beaucoup — l'ancien select 0–5/N-A était trop limité).
+  Dans le rapport généré, hors-format/cage affichent **`N/A` (majuscules) si
+  vide ou 0**, sinon le nombre ; le total = standard + hors-format + cage
+  (valeurs nulles ou `N/A` comptées comme 0).
+- **NO SHOW** (`markNoShow`, bouton rouge dans l'entête de carte) : marque
+  une mission « client absent ». Conserve l'**identité** (booking, date,
+  client, greeteur, prébooking, type, vol, terminal) et met **tout le reste
+  à `N/A`** (pax, bagages, détaxe, lieux, satisfaction) avec
+  `probleme = 'NO SHOW'`. `syncAll()` est appelé avant pour capturer les
+  éditions manuelles. Action annulable via l'undo. A nécessité l'ajout d'une
+  option `N/A` aux deux sélecteurs de lieu et au sélecteur satisfaction.
 - **Mission manuelle** (`addManualMission`) : par défaut **LIVE** avec un
-  booking pré-rempli **`2026-`** (mission ajoutée le jour même, hors PDF).
+  booking pré-rempli **`2026-`**. **Insérée en tête de liste** (`unshift`)
+  et un bouton « + Ajouter une mission manuelle » est présent **en haut ET
+  en bas** de la liste (pour ne pas scroller toute la journée avant d'en
+  ajouter une).
+- **Majuscules / format de saisie** : les champs vol, client et greeteur
+  forcent les majuscules à la frappe (`oninput="this.value=this.value.toUpperCase()"`) ;
+  le terminal n'accepte que des chiffres (`inputmode="numeric"` +
+  `replace(/\D/g,'')`).
+- **Validation avant rapport** (`validateMission`) : `generateReport` refuse
+  de générer si un champ obligatoire manque. Requis partout : booking + pax ;
+  requis en plus pour ARR/DEP : vol + terminal (pas pour TRS/Service). Les
+  champs manquants reçoivent une bordure rouge (`.field-error`, retirée dès
+  la saisie), un message rouge listant les manques s'affiche, et le focus
+  va au premier champ vide.
 - **Bannière de carte** : affiche l'heure de début à côté du booking
   (`Booking 28856 · 08:00`) via `fmtTime(sortTime)` ; rien si l'heure est
   inconnue (`sortTime` = 9999, cas des missions manuelles). `sortTime`
@@ -353,6 +418,51 @@ un bug déjà corrigé) :
     pour réutiliser le chemin fiable ; à défaut, repli sur le texte de
     `planningInput`. Ne se déclenche pas si aucun planning n'est encore
     chargé (pour ne pas vider l'écran à la première sélection).
+12. **Téléphones cliquables** (greeter + chauffeur) : ajout de
+    `greeteurPhone`/`contactPhone`, chips `tel:` dans l'UI. `phoneNorm`
+    durci (commence par `+`/`0`, ≥ 9 chiffres) pour rejeter les faux
+    positifs d'horodatage. `contactPhoneFrom` retiré de `parser.js` au
+    profit de `enrichMissionsWithPhones` (débordement de bande Y, voir
+    §3.1).
+13. **Codes vol avec espace** (`BA 328`) : `flightFromItinerary` accepte
+    `[A-Za-z]{1,3}\s*\d{1,5}` et recompacte (`BA 328` → `BA328`).
+14. **Faux terminal depuis horodatage** (`Terminal 19:00:00` → terminal
+    `19`) : lookahead `(?![\d:])` ajouté (cas U21733, planning 24/06).
+15. **Clients vides — missions agence et groupes ALL-CAPS** : le moteur
+    copier-coller ne reconnaissait que ACA/Monaco/WELL'COM. Ajout de
+    l'extraction `M. NOM +tel` (repli `NOM [2026-xxxxxx]`) et d'un fallback
+    ALL-CAPS (`GM FINANCIAL CHILE`, `WD CONSEILS`). Pax aussi corrigé
+    (recherché depuis la réf booking, pas autour du porteur).
+16. **Bagages par défaut « collants »** : `emptyMission` lisait
+    `defaults.bagStandard` (objet muté par `syncAll`), donc une nouvelle
+    mission héritait du dernier nombre saisi. Fix : `bagStandard` hardcodé
+    à `'1'`, `probleme` hardcodé à `''`. **Ne jamais relier ces champs à
+    `defaults`.**
+17. **Majuscules + terminal numérique** : vol/client/greeteur forcés en
+    majuscules à la frappe, terminal restreint aux chiffres.
+18. **Type TRS** ajouté (transit terminal à terminal) ; lieux laissés vides
+    par `applyLieuDefaults` pour ce type.
+19. **NO SHOW** : bouton rouge dans l'entête, préremplit N/A en gardant
+    l'identité (voir §4). A nécessité l'ajout de l'option `N/A` aux
+    sélecteurs lieu/satisfaction et a corrigé au passage un double
+    `</select>` existant sur le champ satisfaction.
+20. **Copie iOS fiabilisée** (`copyReport`) : l'ancien code affichait
+    « copié ✓ » même en cas d'échec. Réécrit pour détecter le succès réel —
+    `navigator.clipboard.writeText` seulement si `isSecureContext`, sinon
+    fallback iOS avec `document.createRange()` + `setSelectionRange()` (le
+    `.select()` seul est ignoré par Safari iOS sur un textarea hors-écran).
+    Message d'échec explicite en rouge si tout échoue.
+21. **Session multi-jours (3 jours glissants)** : `restoreState` jetait la
+    session dès le lendemain (`state.day !== todayKey()`). Remplacé par un
+    anneau `{ days: { "YYYY-MM-DD": {...} } }` conservant les 3 derniers
+    jours (`pruneStore`), restaurant la session la plus récente disponible.
+    Rétrocompat avec l'ancien format à plat gérée par `loadStore`.
+    `clearState` n'efface plus que le jour courant.
+22. **Validation avant rapport** (`validateMission`) : booking + pax requis
+    partout, vol + terminal en plus pour ARR/DEP ; champs manquants en
+    rouge + focus (voir §4).
+23. **Bouton mission manuelle remonté** + insertion en tête de liste
+    (`unshift`).
 
 ---
 
@@ -375,6 +485,14 @@ PDF source) :
 - `Mission-2026-06-20_19_49.pdf` (21/06) — planning le plus éclaté
   testé, valide le fix d'alignement par rang sur un grand nombre de
   porteurs
+- `Mission-2026-06-22_22_11.pdf` (23/06) — 6 pages, contient `BA 328`
+  (vol à espace), Monaco Prestige Limousines, SP Hinduja Bank (clients
+  agence), valide l'extraction client/pax/contact agence
+- `Mission-2026-06-23_22_02.pdf` (24/06) — 8 pages, contient
+  `GM FINANCIAL CHILE` / `WD CONSEILS` (groupes ALL-CAPS), U21733
+  (`Terminal 19:00:00` piège terminal), greeter Antoine au numéro
+  fragmenté sur 2 lignes, faux positif contact Nathan D — valide les fixes
+  14/15/12
 
 **Protocole minimal avant de livrer un changement touchant
 extraction/attribution** :
@@ -409,6 +527,11 @@ pas un oubli :
   TCPDF change radicalement de gabarit.
 - **Dépendance pdf.js via CDN sans SRI** : pas de vérification
   d'intégrité. Accepté avec la sécurité globale.
+- **`contactPhone` dépend du texte complet, pas des coordonnées** : depuis
+  le retrait de `contactPhoneFrom` du parser PDF, le numéro chauffeur est
+  extrait par `enrichMissionsWithPhones` sur le texte aplati. Fiable sur les
+  plannings testés mais sensible à un changement de libellé
+  (`Contact Chauffeur:`) ou de mise en page agence.
 
 ## 8. Direction artistique (DA Well'Com Air)
 
