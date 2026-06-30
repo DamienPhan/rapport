@@ -453,7 +453,7 @@ let lastPdfPages = null;   // pages coordonnées du dernier PDF chargé (pour re
 
 function emptyMission(){
   return {
-    booking:'', date: todayStr(), vol:'', terminal:'', type:'DEP', client:'', greeteur:'', greeteurPhone:'', contactPhone:'', pax:'',
+    booking:'', date: todayStr(), vol:'', terminal:'', type:'DEP', client:'', clientPhone:'', greeteur:'', greeteurPhone:'', contactPhone:'', pax:'',
     prebooking: defaults.prebooking,
     detaxe: defaults.detaxe,
     lieuRencontre: defaults.lieuRencontre,
@@ -720,7 +720,7 @@ function extractMissionsPdfjs(text, porterName){
     const finalBooking=isACA?(mnum||booking):(clientRef||booking);
 
     // Agency client name: "M. NAME +phone" most reliable; fallback: "NAME [2026-XXXXXX]"
-    let agencyClientName='';
+    let agencyClientName='', agencyClientPhone='';
     if(clientTok==='AGENCY' && clientRef){
       const mM=W.match(/M\.\s+([A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.' \-]+?)(?=\s+\+\d|\s+(?:Terminal\s+)?T[12]\s+\d{2}:)/i);
       if(mM) agencyClientName=mM[1].trim();
@@ -729,6 +729,8 @@ function extractMissionsPdfjs(text, porterName){
         const agM=W.match(new RegExp('([A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.\' \\-]+?)\\s*\\['+bkEsc+'\\]'));
         if(agM) agencyClientName=agM[1].trim().replace(/^M\.\s*/,'');
       }
+      const cpM=W.match(/M\.\s+[A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.'\s\-]*?\s+([+]\d[\d ]{7,}\d)/);
+      if(cpM) agencyClientPhone=cpM[1].replace(/\s+/g,'');
     }
 
     const m=emptyMission();
@@ -737,6 +739,7 @@ function extractMissionsPdfjs(text, porterName){
     m.date = dm ? dm[1]+'/'+dm[2] : todayStr();
     m.booking=finalBooking; m.vol=vol; m.terminal=term; m.type=type;
     m.client=isACA?'ACA ETIC':clientTok==='Monaco'?'Monaco Mediax':clientTok==='WELLCOM'?"WELL'COM AIR":agencyClientName;
+    m.clientPhone=agencyClientPhone;
     m.greeteur=greeter;
     // Pax: search "(N)" after the booking ref in full text (avoids bleeding from adjacent missions)
     if(finalBooking){
@@ -1119,12 +1122,13 @@ function extractMissionsCopyPaste(text, porterName){
       else if(/arriv.?e/i.test(before)) type='ARR';
       else if(/d.?part/i.test(before)) type='DEP';
 
-      let client='';
+      let client='', clientPhone='';
       const cM = before.match(/(Monaco Mediax|ACA \([^)]+\))(?![^]*(Monaco Mediax|ACA \())/);
       if(cM) client = /Monaco/i.test(cM[1]) ? 'Monaco Mediax' : 'ACA ETIC';
       else if(/^20\d{2}-/.test(b.num)){
         // Agency mission: "M. NAME +phone" is the most reliable pattern across text formats
-        const mM = (before + after.slice(0, 1500)).match(/M\.\s+([A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.' \-]+?)(?=\s+\+\d|\s+(?:Terminal\s+)?T[12]\s+\d{2}:)/i);
+        const scope = before + after.slice(0, 1500);
+        const mM = scope.match(/M\.\s+([A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.' \-]+?)(?=\s+\+\d|\s+(?:Terminal\s+)?T[12]\s+\d{2}:)/i);
         if(mM) client = mM[1].trim();
         else {
           // Fallback: "NAME [2026-XXXXXX]" (same line only, newlines excluded from name)
@@ -1132,6 +1136,8 @@ function extractMissionsCopyPaste(text, porterName){
           const agM = text.match(new RegExp('([A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.\' \\-]+?)\\s*\\[' + bkEsc + '\\]'));
           if(agM) client = agM[1].trim().replace(/^M\.\s*/, '');
         }
+        const cpM = scope.match(/M\.\s+[A-Za-z\xc0-\xff][A-Za-z\xc0-\xff.'\s\-]*?\s+([+]\d[\d ]{7,}\d)/);
+        if(cpM) clientPhone = cpM[1].replace(/\s+/g, '');
       }
 
       // Pax: search "(N)" after the booking ref (not around the porter pos, to avoid bleeding from previous missions)
@@ -1147,7 +1153,7 @@ function extractMissionsCopyPaste(text, porterName){
       else if(/Parking\s*Pro/i.test(after) || /Parking\s*Pro/i.test(before.slice(-200))) lieuDepose='Parking pro';
 
       Object.assign(mission, {
-        booking: b.num, type, client, greeteur, pax,
+        booking: b.num, type, client, clientPhone, greeteur, pax,
         vol: f.vol, terminal: f.terminal,
         lieuDepose, bookingOptions: [], flightOptions: []
       });
@@ -1328,7 +1334,9 @@ function renderMission(m, idx){
       <div class="grid">
         <div class="field"><label>Booking #</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
         <div class="field"><label>Date</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
-        <div class="field full"><label>Client</label><input id="${fieldId(idx,'client')}" value="${m.client}" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="field full"><label>Client</label><input id="${fieldId(idx,'client')}" value="${m.client}" oninput="this.value=this.value.toUpperCase()">
+        ${m.clientPhone ? `<div class="tel-row"><a href="tel:${m.clientPhone}" class="tel-chip">📞 ${m.clientPhone}</a></div>` : ''}
+        </div>
         <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="ex: Linda.K" oninput="this.value=this.value.toUpperCase()">
         ${m.greeteurPhone ? `<div class="tel-row"><a href="tel:${m.greeteurPhone}" class="tel-chip">📞 ${m.greeteurPhone}</a></div>` : ''}
         </div>

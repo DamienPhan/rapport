@@ -180,15 +180,20 @@
   }
 
   function clientFromColumn(c2) {
-    if (/ACA \(A[ée]roport/.test(c2)) return { tok: 'ACA', label: 'ACA ETIC' };
-    if (/Monaco Mediax/.test(c2)) return { tok: 'Monaco', label: 'Monaco Mediax' };
-    if (/WELL'COM/.test(c2)) return { tok: 'WELLCOM', label: "WELL'COM AIR" };
+    // Téléphone client : "M. NOM +phone" dans la colonne client (missions agence)
+    var phone = '';
+    var pm = c2.match(/M\.\s+[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.'\s\-]*?\s+([+]\d[\d ]{7,}\d)/);
+    if (pm) phone = pm[1].replace(/\s+/g, '');
+
+    if (/ACA \(A[ée]roport/.test(c2)) return { tok: 'ACA', label: 'ACA ETIC', phone: phone };
+    if (/Monaco Mediax/.test(c2)) return { tok: 'Monaco', label: 'Monaco Mediax', phone: phone };
+    if (/WELL'COM/.test(c2)) return { tok: 'WELLCOM', label: "WELL'COM AIR", phone: phone };
     var br = c2.match(/^(.*?)\s*\[(20\d{2}-\d{6})\]/);
-    if (br) return { tok: 'AGENCY', ref: br[2], label: norm(br[1]).replace(/^M\.\s*/, '') };
+    if (br) return { tok: 'AGENCY', ref: br[2], label: norm(br[1]).replace(/^M\.\s*/, ''), phone: phone };
     // ALL-CAPS group clients: "GM FINANCIAL CHILE (3)…", "WD CONSEILS (1)…"
     var gc = c2.match(/^([A-Z][A-Z0-9\s'.&\-]{3,}[A-Z0-9])(?=\s*[\(\d]|\s*$)/);
-    if (gc) return { tok: 'OTHER', label: gc[1].trim() };
-    return { tok: '', label: '' };
+    if (gc) return { tok: 'OTHER', label: gc[1].trim(), phone: phone };
+    return { tok: '', label: '', phone: phone };
   }
 
   function paxFromColumn(c2) {
@@ -302,6 +307,7 @@
       greeteur: client.tok === 'AGENCY' ? '' : greeterInfo.name,
       greeteurPhone: client.tok === 'AGENCY' ? '' : greeterInfo.phone,
       contactPhone: '',  // filled by enrichMissionsWithPhones (full-text search, avoids band-bleed)
+      clientPhone: client.phone || '',
       pax: paxFromColumn(row.c2),
       prebooking: 'PRÉ-BOOKING',
       lieuDepose: isService ? '' : lieuFor(type, row.itin),
