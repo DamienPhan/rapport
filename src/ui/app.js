@@ -33,6 +33,11 @@ function getPorterName(){
   return sel.value;
 }
 
+function openPdfPicker(){
+  const input = document.getElementById('pdfInput');
+  if(input) input.click();
+}
+
 function readPdfFile(file){
   if(file && typeof file.arrayBuffer === 'function'){
     return file.arrayBuffer();
@@ -544,6 +549,7 @@ window.pickFlight = pickFlight;
 window.undoMissions = undoMissions;
 window.clearPlanningInput = clearPlanningInput;
 window.clearState = clearState;
+window.openPdfPicker = openPdfPicker;
 
 
 document.getElementById('extractBtn').addEventListener('click', () => {

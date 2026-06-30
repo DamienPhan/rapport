@@ -61,7 +61,7 @@
   <div class="panel">
     <h2>2. Planning du jour</h2>
     <div class="pdfrow">
-      <label class="btn pdfbtn" for="pdfInput">📄 Charger le PDF (recommandé)</label>
+      <button class="btn pdfbtn" type="button" onclick="openPdfPicker()">📄 Charger le PDF (recommandé)</button>
       <input id="pdfInput" type="file" accept=".pdf,application/pdf" style="position:absolute;left:-9999px;opacity:0;width:1px;height:1px">
     </div>
     <div id="pdfStatus" class="hint" style="display:none"></div>
