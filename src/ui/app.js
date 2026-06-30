@@ -33,6 +33,18 @@ function getPorterName(){
   return sel.value;
 }
 
+function readPdfFile(file){
+  if(file && typeof file.arrayBuffer === 'function'){
+    return file.arrayBuffer();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Impossible de lire le fichier.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 // Recharge automatiquement les missions du porteur sélectionné depuis la
 // dernière source chargée (PDF en priorité, sinon texte collé). Ne fait rien
 // si aucun planning n'a encore été chargé, pour ne pas vider l'écran.
@@ -587,7 +599,7 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-      const buf = await file.arrayBuffer();
+      const buf = await readPdfFile(file);
       const pdf = await pdfjsLib.getDocument({data: buf}).promise;
       const pages = [];
       let fullText = '';

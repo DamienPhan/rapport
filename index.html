@@ -62,7 +62,7 @@
     <h2>2. Planning du jour</h2>
     <div class="pdfrow">
       <label class="btn pdfbtn" for="pdfInput">📄 Charger le PDF (recommandé)</label>
-      <input id="pdfInput" type="file" accept="application/pdf" style="display:none">
+      <input id="pdfInput" type="file" accept=".pdf,application/pdf" style="position:absolute;left:-9999px;opacity:0;width:1px;height:1px">
     </div>
     <div id="pdfStatus" class="hint" style="display:none"></div>
     <div class="orsep">— ou colle le texte —</div>
@@ -103,9 +103,6 @@
   <option value="Theo"></option>
   <option value="ZOUBEIDA"></option>
 </datalist>
-
-
-</main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module" src="src/ui/app.js"></script>
