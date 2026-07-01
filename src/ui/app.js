@@ -65,8 +65,7 @@ function reloadForPorter(){
       if(!r.date) m.date = todayStr();
       return applyPlaceDefaults(m, CFG.places);
     });
-    const fullText = document.getElementById('planningInput').value;
-    if(extracted.length && fullText) enrichWithPhones(extracted, fullText, CFG);
+    if(extracted.length && text) enrichWithPhones(extracted, text, CFG);
     if(!extracted.length && text) extracted = extractMissions(text, porter, CFG);
   } else if(text){
     extracted = extractMissions(text, porter, CFG);
@@ -644,6 +643,7 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
       });
 
       if(extracted.length === 0) extracted = extractMissions(fullText, porter, CFG);
+      if(extracted.length) enrichWithPhones(extracted, fullText, CFG);
 
       if(extracted.length === 0){
         missions = [];

@@ -6,6 +6,25 @@ décisions ont été prises et pourquoi, quels pièges éviter.
 
 ---
 
+## 0. Commandes
+
+```bash
+npm install       # installe pdfjs-dist (nécessaire pour les tests PDF)
+npm test          # lance tests/parser.test.js (unitaires + intégration PDF)
+npm run serve     # sert le dossier en http://localhost:8080 (python3 -m http.server 8080)
+```
+
+Pas de build, pas de lint configuré. Les modules ES exigent `http://` — ne
+jamais ouvrir `index.html` en `file://` (CORS bloque les imports).
+
+`tests/parser.test.js` est un runner maison (pas de framework) : chaque cas
+est déclaré avec `test('nom', fn)` et tous les tests s'exécutent
+séquentiellement à chaque `npm test` — il n'y a pas de mécanisme pour cibler
+un seul test par nom ; pour isoler un cas pendant un débogage, commenter
+temporairement les autres appels à `test(...)` dans le fichier.
+
+---
+
 ## 1. Qui, quoi, pourquoi
 
 **Utilisateur** : Damien P., porteur bagagiste / greeteur à l'aéroport de

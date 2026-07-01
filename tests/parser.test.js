@@ -87,13 +87,13 @@ const fixtures = [
 
 async function runPdfTests() {
   let pdfjs;
-  try { pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs'); }
+  try { pdfjs = await import('pdfjs-dist/legacy/build/pdf.js'); }
   catch (e) { console.log('  ⚠️  pdfjs-dist absent — tests PDF ignorés (npm i pdfjs-dist)'); return; }
 
   // Localise les polices standard de pdfjs (évite les warnings et les pertes de glyphes)
   let fontUrl;
   try {
-    const pdfjsPath = fileURLToPath(import.meta.resolve('pdfjs-dist/legacy/build/pdf.mjs'));
+    const pdfjsPath = fileURLToPath(import.meta.resolve('pdfjs-dist/legacy/build/pdf.js'));
     fontUrl = join(dirname(pdfjsPath), '..', '..', 'standard_fonts') + '/';
   } catch (e) { fontUrl = undefined; }
 
