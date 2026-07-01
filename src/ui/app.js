@@ -75,6 +75,9 @@ function reloadForPorter(){
   }
   if(missions.length) pushUndo();
   if(extracted.length){
+    extracted.forEach(m => {
+      if((m.bookingOptions||[]).length > 1 || (m.flightOptions||[]).length > 1) m.expanded = true;
+    });
     missions = extracted;
     render();
   } else {
@@ -181,16 +184,29 @@ function typeIcon(type){
   return { ARR: '🛬 ', DEP: '🛫 ', TRS: '🔁 ' }[type] || '🧳 ';
 }
 
+function missionSummary(m){
+  const bits = [];
+  if(m.client) bits.push(m.client);
+  if(m.vol) bits.push(m.vol + (m.terminal ? ' T' + m.terminal : ''));
+  return bits.join(' · ');
+}
+
 function renderMission(m, idx){
   const total = (parseInt(m.bagStandard)||0) + (parseInt(m.bagHorsFormat)||0) + (parseInt(m.bagCage)||0);
+  const isOpen = !!m.expanded;
+  const summary = missionSummary(m);
   return `
-  <div class="mission" data-idx="${idx}">
-    <div class="mission-head">
-      <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
+  <div class="mission${isOpen?' open':''}" data-idx="${idx}">
+    <div class="mission-head" onclick="toggleMission(${idx})">
+      <div class="mhead-main">
+        <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
+        ${summary ? `<div class="mhead-summary">${escHtml(summary)}</div>` : ''}
+      </div>
       <div class="right">
-        <button class="btn-noshow" onclick="markNoShow(${idx})" title="Marquer comme NO SHOW">NO SHOW</button>
+        <button class="btn-noshow" onclick="event.stopPropagation();markNoShow(${idx})" title="Marquer comme NO SHOW">NO SHOW</button>
         <span class="badge badge-${m.type||'Service'}">${typeIcon(m.type)}${m.type || '—'}</span>
-        <button class="del" onclick="removeMission(${idx})" title="Supprimer">✕</button>
+        <button class="del" onclick="event.stopPropagation();removeMission(${idx})" title="Supprimer">✕</button>
+        <span class="chevron">▾</span>
       </div>
     </div>
     <div class="mission-body">
@@ -404,8 +420,19 @@ function clearPlanningInput(){
 function addManualMission(){
   pushUndo();
   syncAll();
-  missions.unshift(createManualMission());
+  const m = createManualMission();
+  m.expanded = true;
+  missions.unshift(m);
   render();
+  saveState();
+}
+
+function toggleMission(idx){
+  const m = missions[idx];
+  if(!m) return;
+  m.expanded = !m.expanded;
+  const card = document.querySelector(`.mission[data-idx="${idx}"]`);
+  if(card) card.classList.toggle('open', m.expanded);
   saveState();
 }
 
@@ -566,6 +593,7 @@ window.togglePorterCustom = togglePorterCustom;
 window.reloadForPorter = reloadForPorter;
 window.addManualMission = addManualMission;
 window.removeMission = removeMission;
+window.toggleMission = toggleMission;
 window.markNoShow = markNoShow;
 window.toggleAutre = toggleAutre;
 window.updateTotal = updateTotal;
