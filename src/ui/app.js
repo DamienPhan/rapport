@@ -196,39 +196,39 @@ function renderMission(m, idx){
     <div class="mission-body">
       ${renderCandidates(m, idx)}
       <div class="grid">
-        <div class="field"><label>Booking #</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
-        <div class="field"><label>Date</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
-        <div class="field full"><label>Client</label><input id="${fieldId(idx,'client')}" value="${m.client}" oninput="this.value=this.value.toUpperCase()">
+        <div class="field"><label>🔖 Booking #</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
+        <div class="field"><label>📅 Date</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
+        <div class="field full"><label>👤 Client</label><input id="${fieldId(idx,'client')}" value="${m.client}" oninput="this.value=this.value.toUpperCase()">
         ${m.clientPhone ? `<div class="tel-row"><a href="tel:${m.clientPhone}" class="tel-chip">📞 ${m.clientPhone}</a></div>` : ''}
         </div>
-        <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="ex: Linda.K" oninput="this.value=this.value.toUpperCase()">
+        <div class="field full"><label>🙋 Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="ex: Linda.K" oninput="this.value=this.value.toUpperCase()">
         ${m.greeteurPhone ? `<div class="tel-row"><a href="tel:${m.greeteurPhone}" class="tel-chip">📞 ${m.greeteurPhone}</a></div>` : ''}
         </div>
-        ${m.contactPhone ? `<div class="field full"><label>Contact chauffeur</label><div class="tel-row"><a href="tel:${m.contactPhone}" class="tel-chip">📞 ${m.contactPhone}</a></div></div>` : ''}
+        ${m.contactPhone ? `<div class="field full"><label>🚗 Contact chauffeur</label><div class="tel-row"><a href="tel:${m.contactPhone}" class="tel-chip">📞 ${m.contactPhone}</a></div></div>` : ''}
         <div class="field">
-          <label>Pré-booking / Live</label>
+          <label>🕒 Pré-booking / Live</label>
           <select id="${fieldId(idx,'prebooking')}">
             <option ${m.prebooking==='PRÉ-BOOKING'?'selected':''}>PRÉ-BOOKING</option>
             <option ${m.prebooking==='LIVE'?'selected':''}>LIVE</option>
           </select>
         </div>
         <div class="field">
-          <label>Type de service</label>
+          <label>🛠️ Type de service</label>
           <select id="${fieldId(idx,'type')}" onchange="updateTypeBadge(${idx})">
             <option value="DEP" ${m.type==='DEP'?'selected':''}>🛫 DEP</option>
             <option value="ARR" ${m.type==='ARR'?'selected':''}>🛬 ARR</option>
             <option value="TRS" ${m.type==='TRS'?'selected':''}>🔁 TRS</option>
           </select>
         </div>
-        <div class="field"><label>Vol - code IATA</label><input id="${fieldId(idx,'vol')}" value="${m.vol}" oninput="this.value=this.value.toUpperCase()"></div>
-        <div class="field"><label>Terminal</label><input id="${fieldId(idx,'terminal')}" value="${m.terminal}" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')"></div>
-        <div class="field"><label>Nombre de passagers</label><input id="${fieldId(idx,'pax')}" value="${m.pax}" inputmode="numeric"></div>
+        <div class="field"><label>✈️ Vol - code IATA</label><input id="${fieldId(idx,'vol')}" value="${m.vol}" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="field"><label>🏢 Terminal</label><input id="${fieldId(idx,'terminal')}" value="${m.terminal}" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+        <div class="field"><label>👥 Nombre de passagers</label><input id="${fieldId(idx,'pax')}" value="${m.pax}" inputmode="numeric"></div>
       </div>
 
       <div class="grid">
-        <div class="field"><label>Bagages standard</label><input id="${fieldId(idx,'bagStandard')}" value="${m.bagStandard}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
-        <div class="field"><label>Hors format</label><input id="${fieldId(idx,'bagHorsFormat')}" value="${m.bagHorsFormat}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
-        <div class="field full"><label>Cage animal</label><input id="${fieldId(idx,'bagCage')}" value="${m.bagCage}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+        <div class="field"><label>🧳 Bagages standard</label><input id="${fieldId(idx,'bagStandard')}" value="${m.bagStandard}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+        <div class="field"><label>📦 Hors format</label><input id="${fieldId(idx,'bagHorsFormat')}" value="${m.bagHorsFormat}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+        <div class="field full"><label>🐾 Cage animal</label><input id="${fieldId(idx,'bagCage')}" value="${m.bagCage}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
       </div>
       <div class="total-row">
         <span>Total bagages pris en charge</span>
@@ -237,7 +237,7 @@ function renderMission(m, idx){
 
       <div class="grid">
         <div class="field">
-          <label>Détaxe</label>
+          <label>💶 Détaxe</label>
           <select id="${fieldId(idx,'detaxe')}">
             <option ${m.detaxe==='Non'?'selected':''}>Non</option>
             <option ${m.detaxe==='Oui'?'selected':''}>Oui</option>
@@ -245,12 +245,12 @@ function renderMission(m, idx){
           </select>
         </div>
         <div class="field">
-          <label>Nombre de porteurs</label>
+          <label>🧑‍🤝‍🧑 Nombre de porteurs</label>
           <input id="${fieldId(idx,'porteurs')}" value="${m.porteurs}">
         </div>
 
         <div class="field">
-          <label>Lieu de rencontre</label>
+          <label>📍 Lieu de rencontre</label>
           <select id="${fieldId(idx,'lieuRencontre')}" onchange="toggleAutre(${idx},'lieuRencontre')">
             <option ${m.lieuRencontre==='Dépose minute'?'selected':''}>Dépose minute</option>
             <option ${m.lieuRencontre==='Tapis bagage'?'selected':''}>Tapis bagage</option>
@@ -266,7 +266,7 @@ function renderMission(m, idx){
         </div>
 
         <div class="field">
-          <label>Lieu de dépose</label>
+          <label>🏁 Lieu de dépose</label>
           <select id="${fieldId(idx,'lieuDepose')}" onchange="toggleAutre(${idx},'lieuDepose')">
             <option value="AUTO_CHECKIN" ${m.lieuDepose==='AUTO_CHECKIN'?'selected':''}>Check-in + vol (${m.vol || '...'})</option>
             <option ${m.lieuDepose==='Dépose minute'?'selected':''}>Dépose minute</option>
@@ -281,10 +281,10 @@ function renderMission(m, idx){
           <input class="autre-input" id="${fieldId(idx,'lieuDeposeAutre')}" placeholder="Précise le lieu" value="${m.lieuDeposeAutre||''}" style="display:${m.lieuDepose==='Autre'?'block':'none'}">
         </div>
 
-        <div class="field full"><label>Problème rencontré ?</label><textarea class="small" id="${fieldId(idx,'probleme')}">${m.probleme}</textarea></div>
+        <div class="field full"><label>⚠️ Problème rencontré ?</label><textarea class="small" id="${fieldId(idx,'probleme')}">${m.probleme}</textarea></div>
 
         <div class="field full">
-          <label>Satisfaction client</label>
+          <label>⭐ Satisfaction client</label>
           <select id="${fieldId(idx,'satisfaction')}">
             <option ${m.satisfaction==='Excellente'?'selected':''}>Excellente</option>
             <option ${m.satisfaction==='Très bien'?'selected':''}>Très bien</option>
