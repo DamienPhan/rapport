@@ -177,6 +177,10 @@ function pickFlight(idx, el){
   el.classList.add('active');
 }
 
+function typeIcon(type){
+  return { ARR: '🛬 ', DEP: '🛫 ', TRS: '🔁 ' }[type] || '🧳 ';
+}
+
 function renderMission(m, idx){
   const total = (parseInt(m.bagStandard)||0) + (parseInt(m.bagHorsFormat)||0) + (parseInt(m.bagCage)||0);
   return `
@@ -185,7 +189,7 @@ function renderMission(m, idx){
       <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
       <div class="right">
         <button class="btn-noshow" onclick="markNoShow(${idx})" title="Marquer comme NO SHOW">NO SHOW</button>
-        <span class="badge">${m.type || '—'}</span>
+        <span class="badge badge-${m.type||'Service'}">${typeIcon(m.type)}${m.type || '—'}</span>
         <button class="del" onclick="removeMission(${idx})" title="Supprimer">✕</button>
       </div>
     </div>
@@ -210,10 +214,10 @@ function renderMission(m, idx){
         </div>
         <div class="field">
           <label>Type de service</label>
-          <select id="${fieldId(idx,'type')}">
-            <option value="DEP" ${m.type==='DEP'?'selected':''}>DEP</option>
-            <option value="ARR" ${m.type==='ARR'?'selected':''}>ARR</option>
-            <option value="TRS" ${m.type==='TRS'?'selected':''}>TRS</option>
+          <select id="${fieldId(idx,'type')}" onchange="updateTypeBadge(${idx})">
+            <option value="DEP" ${m.type==='DEP'?'selected':''}>🛫 DEP</option>
+            <option value="ARR" ${m.type==='ARR'?'selected':''}>🛬 ARR</option>
+            <option value="TRS" ${m.type==='TRS'?'selected':''}>🔁 TRS</option>
           </select>
         </div>
         <div class="field"><label>Vol - code IATA</label><input id="${fieldId(idx,'vol')}" value="${m.vol}" oninput="this.value=this.value.toUpperCase()"></div>
@@ -407,6 +411,15 @@ function markNoShow(idx){
   saveState();
 }
 
+function updateTypeBadge(idx){
+  const type = document.getElementById(fieldId(idx,'type')).value;
+  const badge = document.querySelector(`.mission[data-idx="${idx}"] .mission-head .badge`);
+  if(badge){
+    badge.className = `badge badge-${type||'Service'}`;
+    badge.textContent = typeIcon(type) + (type || '—');
+  }
+}
+
 function toggleAutre(idx, field){
   const sel = document.getElementById(fieldId(idx, field));
   const inp = document.getElementById(fieldId(idx, field+'Autre'));
@@ -540,6 +553,7 @@ window.removeMission = removeMission;
 window.markNoShow = markNoShow;
 window.toggleAutre = toggleAutre;
 window.updateTotal = updateTotal;
+window.updateTypeBadge = updateTypeBadge;
 window.resolveLieu = resolveLieu;
 window.generateReport = generateReport;
 window.copyReport = copyReport;

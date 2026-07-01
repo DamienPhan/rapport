@@ -142,6 +142,9 @@
   .mission-head .right{display:flex;align-items:center;gap:10px;}
   .mission-head .badge{
     font-size:.68rem;
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
     background:linear-gradient(180deg,#d4b87e,var(--gold));
     color:var(--navy);
     padding:3px 10px;
@@ -149,6 +152,10 @@
     font-weight:700;
     letter-spacing:.04em;
   }
+  .mission-head .badge-ARR{background:linear-gradient(180deg,#4fae8e,#2f8f6b);color:#fff;}
+  .mission-head .badge-DEP{background:linear-gradient(180deg,#d4b87e,var(--gold));color:var(--navy);}
+  .mission-head .badge-TRS{background:linear-gradient(180deg,#8a8fc2,#6b6f9c);color:#fff;}
+  .mission-head .badge-Service{background:linear-gradient(180deg,#9aa3ad,#7c8790);color:#fff;}
   .mission-head .del{
     background:none;
     border:none;
