@@ -354,6 +354,19 @@
   }
   a.tel-chip:hover{background:var(--gold);border-color:var(--gold);}
   .tel-row{margin-top:2px;}
+  .input-copy-row{display:flex;gap:6px;align-items:stretch;}
+  .input-copy-row input{flex:1;min-width:0;}
+  .copy-icon-btn{
+    flex:0 0 auto;
+    background:var(--cream);
+    border:1px solid var(--cream-line);
+    border-radius:6px;
+    padding:0 10px;
+    font-size:.9rem;
+    cursor:pointer;
+    color:var(--navy);
+  }
+  .copy-icon-btn:hover{background:var(--gold);border-color:var(--gold);}
   .pdfrow { margin-bottom: 8px; }
   .pdfbtn { display: inline-block; cursor: pointer; background: var(--navy); }
   .pdfbtn:hover { background: var(--navy-2); }
