@@ -246,7 +246,12 @@ function renderMission(m, idx){
             </select>
           </div>
           <div class="field"><label>Nombre de passagers</label><input id="${fieldId(idx,'pax')}" value="${m.pax}" inputmode="numeric"></div>
-          <div class="field"><label>Vol - code IATA</label><input id="${fieldId(idx,'vol')}" value="${m.vol}" oninput="this.value=this.value.toUpperCase()"></div>
+          <div class="field"><label>Vol - code IATA</label>
+            <div class="input-copy-row">
+              <input id="${fieldId(idx,'vol')}" value="${m.vol}" oninput="this.value=this.value.toUpperCase()">
+              <button type="button" class="copy-icon-btn" id="${fieldId(idx,'volCopyBtn')}" onclick="copyFlight(${idx})" title="Copier le numéro de vol">📋</button>
+            </div>
+          </div>
           <div class="field"><label>Terminal</label><input id="${fieldId(idx,'terminal')}" value="${m.terminal}" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')"></div>
         </div>
       </div>
@@ -538,41 +543,43 @@ function generateReport(idx){
   copyReport(idx);
 }
 
-async function copyReport(idx){
-  const text = document.getElementById(fieldId(idx,'pre')).textContent;
-  let ok = false;
-
+async function writeClipboard(text){
   if(navigator.clipboard && window.isSecureContext){
     try{
       await navigator.clipboard.writeText(text);
-      ok = true;
-    }catch(e){ ok = false; }
+      return true;
+    }catch(e){ /* repli ci-dessous */ }
   }
 
-  if(!ok){
-    // iOS Safari fallback: textarea must be visible, non-readonly, and selected via range
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.top = '0';
-    ta.style.left = '0';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent);
-    if(isIOS){
-      const range = document.createRange();
-      range.selectNodeContents(ta);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-      ta.setSelectionRange(0, text.length);
-    }else{
-      ta.select();
-    }
-    try{ ok = document.execCommand('copy'); }catch(e){ ok = false; }
-    document.body.removeChild(ta);
+  // iOS Safari fallback: textarea must be visible, non-readonly, and selected via range
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.top = '0';
+  ta.style.left = '0';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent);
+  if(isIOS){
+    const range = document.createRange();
+    range.selectNodeContents(ta);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    ta.setSelectionRange(0, text.length);
+  }else{
+    ta.select();
   }
+  let ok = false;
+  try{ ok = document.execCommand('copy'); }catch(e){ ok = false; }
+  document.body.removeChild(ta);
+  return ok;
+}
+
+async function copyReport(idx){
+  const text = document.getElementById(fieldId(idx,'pre')).textContent;
+  const ok = await writeClipboard(text);
 
   const fb = document.getElementById(fieldId(idx,'feedback'));
   if(ok){
@@ -584,6 +591,21 @@ async function copyReport(idx){
     fb.textContent = 'Échec — sélectionne et copie à la main';
     fb.classList.add('err', 'show');
     setTimeout(()=>{ fb.classList.remove('show'); }, 3000);
+  }
+  return ok;
+}
+
+async function copyFlight(idx){
+  const input = document.getElementById(fieldId(idx,'vol'));
+  const text = input.value.trim();
+  if(!text) return false;
+  const ok = await writeClipboard(text);
+
+  const btn = document.getElementById(fieldId(idx,'volCopyBtn'));
+  if(btn){
+    const original = btn.textContent;
+    btn.textContent = ok ? '✓' : '✕';
+    setTimeout(()=>{ btn.textContent = original; }, 1200);
   }
   return ok;
 }
@@ -601,6 +623,7 @@ window.updateTypeBadge = updateTypeBadge;
 window.resolveLieu = resolveLieu;
 window.generateReport = generateReport;
 window.copyReport = copyReport;
+window.copyFlight = copyFlight;
 window.pickBooking = pickBooking;
 window.pickFlight = pickFlight;
 window.undoMissions = undoMissions;
