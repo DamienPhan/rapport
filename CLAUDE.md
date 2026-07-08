@@ -379,6 +379,18 @@ manuellement sur la carte.
   inconnue (`sortTime` = 9999, cas des missions manuelles). `sortTime`
   survit à `syncAll` (aucun champ DOM correspondant) et est préservé au
   choix d'un chip booking (`pickBooking`).
+- **Format du rapport généré** (`generateReportText` dans
+  `src/core/report.js`) : la ligne booking affiche le `#` **après** les deux
+  points — `Booking : #30258` (et non `Booking # : 30258`). La section « Un
+  problème rencontré ? » affiche **« Aucun problème »** quand `m.probleme`
+  est vide (au lieu d'une ligne blanche) ; reste inchangé si `probleme` vaut
+  autre chose (ex. `'NO SHOW'`).
+- **Copie du numéro de vol** : un bouton 📋 à côté du champ « Vol - code
+  IATA » (`copyFlight` dans `src/ui/app.js`) copie sa valeur dans le
+  presse-papiers. Réutilise la même logique clipboard fiabilisée iOS que
+  `copyReport` (factorisée dans `writeClipboard`, voir décision historique
+  n°20) — ne pas dupliquer cette logique si un futur champ a besoin du même
+  bouton, l'étendre via `writeClipboard`.
 
 ### Référentiels auto-alimentés (porteurs, greeters)
 
@@ -521,6 +533,26 @@ un bug déjà corrigé) :
     rouge + focus (voir §4).
 23. **Bouton mission manuelle remonté** + insertion en tête de liste
     (`unshift`).
+24. **Retouches rapport (v2, post-refactoring)** : trois demandes utilisateur
+    distinctes traitées en petites itérations sur `src/core/report.js` et
+    `src/ui/app.js` — (a) liste de base des porteurs (`index.html`) mise à
+    jour avec un nouveau collègue (`Bryan L`, sans point final — attention à
+    ne pas réintroduire de point, corrigé une fois par erreur) ; (b) ligne
+    Booking du rapport reformatée `Booking : #xxxxx` (le `#` était avant les
+    deux points, l'utilisateur le voulait après) ; (c) bouton copie 📋 sur le
+    champ Vol (`copyFlight`), qui a motivé l'extraction de `writeClipboard`
+    hors de `copyReport` pour éviter la duplication de la logique clipboard
+    iOS ; (d) section « Un problème rencontré ? » affiche « Aucun problème »
+    (singulier — corrigé une fois après une coquille « Aucun problèmes »)
+    quand le champ est vide. Aucune de ces retouches ne touche
+    `parser-pdf.js`/`parser-text.js` : `npm test` reste vert sans besoin de
+    revalider les 4 plannings de référence (voir §6), la suite de tests
+    suffit. Au passage, un bug d'environnement a été corrigé dans
+    `tests/parser.test.js` : sous la version de Node de cet environnement,
+    `import('pdfjs-dist/legacy/build/pdf.js')` n'expose plus `getDocument`
+    directement sur l'espace de noms ESM (il faut lire `mod.default`) — sans
+    ce fix les tests d'intégration PDF ne s'exécutaient jamais et
+    l'échec passait inaperçu.
 
 ---
 
