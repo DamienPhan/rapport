@@ -87,7 +87,10 @@ const fixtures = [
 
 async function runPdfTests() {
   let pdfjs;
-  try { pdfjs = await import('pdfjs-dist/legacy/build/pdf.js'); }
+  try {
+    const mod = await import('pdfjs-dist/legacy/build/pdf.js');
+    pdfjs = mod.getDocument ? mod : mod.default;
+  }
   catch (e) { console.log('  ⚠️  pdfjs-dist absent — tests PDF ignorés (npm i pdfjs-dist)'); return; }
 
   // Localise les polices standard de pdfjs (évite les warnings et les pertes de glyphes)
