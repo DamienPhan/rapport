@@ -54,7 +54,7 @@ Lieu de rencontre : ${lieuRencontre}
 Lieu de dépose : ${lieuDepose}
 
 4. Un problème rencontré ?
-${m.probleme || 'Aucun problèmes'}
+${m.probleme || 'Aucun problème'}
 
 5. Ressources
 Nombre de porteurs : ${m.porteurs}
