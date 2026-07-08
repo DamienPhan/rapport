@@ -32,7 +32,7 @@ export function generateReportText(m) {
   const clientLine = m.greeteur ? `${m.client} - Greeteur : ${m.greeteur}` : m.client;
 
   return `1. Informations générales
-Booking # : ${m.booking}
+Booking : #${m.booking}
 Date : ${m.date}
 Client : ${clientLine}
 Pré-booking ou Live : ${m.prebooking}
