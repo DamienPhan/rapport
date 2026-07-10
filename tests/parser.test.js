@@ -83,6 +83,7 @@ const fixturesDir = join(__dirname, 'fixtures');
 const fixtures = [
   { file: 'Mission-2026-06-22_22_11.pdf', porter: 'Yaris K.', expect: { count: 3, firstVol: 'DL0028' } },
   { file: 'planning-30.pdf', porter: 'Damien P.', expect: { hasClient: 'MY FRENCH RIVIERA', clientPhone: '+966505609430' } },
+  { file: 'planning-30.pdf', porter: 'Yanis P.', expect: { hasClient: 'DC Aviation G-OPS' } },
 ];
 
 async function runPdfTests() {

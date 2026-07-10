@@ -161,7 +161,7 @@ function flightFromItinerary(itinRaw, cfg) {
   return { vol, terminal: term };
 }
 
-function clientFromColumn(c2, cfg) {
+function clientFromColumn(c2, cfg, hasAirportRef) {
   const phone = extractClientPhone(c2);
   for (const d of cfg.clients.direct) {
     if (d.match.test(c2)) return { tok: d.token, label: d.label, phone };
@@ -170,6 +170,17 @@ function clientFromColumn(c2, cfg) {
   if (br) return { tok: 'AGENCY', ref: br[2], label: norm(br[1]).replace(/^M\.\s*/, ''), phone };
   const gc = c2.match(cfg.clients.groupCapsPattern);
   if (gc) return { tok: 'OTHER', label: gc[1].trim(), phone };
+  // Repli générique (casse mixte, ex. « DC Aviation G-OPS ») : la colonne Client
+  // est positionnelle (coordonnées PDF), donc fiable même sans motif connu.
+  // Ignoré si un M# est présent (hasAirportRef) pour ne pas casser le filet de
+  // sécurité ACA plus bas (`!client.tok && !!mnum` dans rowToFields).
+  if (!hasAirportRef) {
+    const fallback = c2
+      .replace(/\(\d+\)\s*$/, '')
+      .replace(/[+]\d[\d ]{7,}\d/, '')
+      .trim();
+    if (fallback && /[A-Za-zÀ-ÿ]/.test(fallback)) return { tok: 'OTHER', label: fallback, phone };
+  }
   return { tok: '', label: '', phone };
 }
 
@@ -259,7 +270,7 @@ function reconstructPage(words, cfg) {
 
 function rowToFields(row, cfg) {
   const mnum = row.c0.match(/M#\s*(\d+)/);
-  const client = clientFromColumn(row.c2, cfg);
+  const client = clientFromColumn(row.c2, cfg, !!mnum);
   const isAirport = client.tok === cfg.clients.airportToken || (!client.tok && !!mnum);
   const booking = isAirport ? (mnum ? mnum[1] : row.ref) : (client.ref || row.ref);
 
