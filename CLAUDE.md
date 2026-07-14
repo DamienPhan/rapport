@@ -374,11 +374,11 @@ manuellement sur la carte.
   champs manquants reçoivent une bordure rouge (`.field-error`, retirée dès
   la saisie), un message rouge listant les manques s'affiche, et le focus
   va au premier champ vide.
-- **Bannière de carte** : affiche l'heure de début à côté du booking
-  (`Booking 28856 · 08:00`) via `fmtTime(sortTime)` ; rien si l'heure est
-  inconnue (`sortTime` = 9999, cas des missions manuelles). `sortTime`
-  survit à `syncAll` (aucun champ DOM correspondant) et est préservé au
-  choix d'un chip booking (`pickBooking`).
+- **Bannière de carte** : affiche l'heure de début à côté du numéro de
+  booking, sans le mot « Booking » (`28856 · 08:00`) via `fmtTime(sortTime)` ;
+  rien si l'heure est inconnue (`sortTime` = 9999, cas des missions
+  manuelles). `sortTime` survit à `syncAll` (aucun champ DOM correspondant)
+  et est préservé au choix d'un chip booking (`pickBooking`).
 - **Format du rapport généré** (`generateReportText` dans
   `src/core/report.js`) : la ligne booking affiche le `#` **après** les deux
   points — `Booking : #30258` (et non `Booking # : 30258`). La section « Un
