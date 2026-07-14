@@ -165,7 +165,7 @@ function pickBooking(idx, el){
   const titleEl = document.querySelector(`.mission[data-idx="${idx}"] .mission-head strong`);
   if(titleEl){
     const t = missions[idx] ? fmtTime(missions[idx].sortTime) : '';
-    titleEl.innerHTML = 'Booking ' + el.getAttribute('data-num') + (t ? ' <span class="mtime">· ' + t + '</span>' : '');
+    titleEl.innerHTML = el.getAttribute('data-num') + (t ? ' <span class="mtime">· ' + t + '</span>' : '');
   }
   const parent = el.parentNode;
   parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
@@ -199,7 +199,7 @@ function renderMission(m, idx){
   <div class="mission${isOpen?' open':''}" data-idx="${idx}">
     <div class="mission-head" onclick="toggleMission(${idx})">
       <div class="mhead-main">
-        <strong>${m.booking ? 'Booking ' + m.booking : 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
+        <strong>${m.booking || 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
         ${summary ? `<div class="mhead-summary">${escHtml(summary)}</div>` : ''}
       </div>
       <div class="right">
