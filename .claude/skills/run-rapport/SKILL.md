@@ -139,18 +139,14 @@ any change confined to `src/core/*.js`; no browser needed.
 - **`fill` only works on `<input>`/`<textarea>`.** For the porter
   `<select id="porterSelect">` (or any dropdown), use `select`
   (`selectOption`), not `fill` — `fill()` throws on a `<select>`.
-- **Commands are serialized inside the driver on purpose.** Firing
-  several `tmux send-keys ... Enter` in a row without waiting queues
-  them safely now, but the *visible* echo in `capture-pane` can lag
-  behind what you sent — always poll for the specific output string
-  you expect (e.g. `grep -q 'launched\.'`) rather than a fixed `sleep`,
-  and rather than assuming the Nth line corresponds to the Nth command.
-  Before this was fixed, unserialized concurrent `fill()` calls raced
-  on the same page and corrupted each other's keystrokes (a `fill
-  #m0_pax 2` immediately followed by `fill #m0_vol ua272` produced
-  `vol = "2UA272"` and left `pax` empty) — this is why the driver
-  queues commands through a promise chain instead of firing the
-  readline `line` handler concurrently.
+- **Commands are serialized inside the driver on purpose** (see the
+  `queue`/`runLine` comment in `driver.mjs` for why — a real corrupted-
+  input bug it fixes). Firing several `tmux send-keys ... Enter` in a
+  row without waiting queues them safely, but the *visible* echo in
+  `capture-pane` can lag behind what you sent — always poll for the
+  specific output string you expect (e.g. `grep -q 'launched\.'`)
+  rather than a fixed `sleep`, and rather than assuming the Nth line
+  corresponds to the Nth command.
 - **New mission cards render already expanded** (`isOpen` true on
   creation), so you don't need to click anything to see/fill their
   fields right after `addManualMission()` or extraction.
