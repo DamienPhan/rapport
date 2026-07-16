@@ -8,7 +8,8 @@
     "serve": "python3 -m http.server 8080"
   },
   "devDependencies": {
-    "pdfjs-dist": "^3.11.174"
+    "pdfjs-dist": "^3.11.174",
+    "playwright-core": "^1.61.1"
   },
   "license": "UNLICENSED",
   "private": true
