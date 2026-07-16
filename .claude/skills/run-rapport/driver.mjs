@@ -19,6 +19,18 @@ fs.mkdirSync(SHOT_DIR, { recursive: true });
 let browser = null;
 let page = null;
 
+// `sel value` -> [sel, value], splitting only on the first space so the
+// value itself can contain spaces (e.g. `fill #m0_client ACA ETIC`).
+function splitArg(args) {
+  const sp = args.indexOf(' ');
+  return sp === -1 ? [args, ''] : [args.slice(0, sp), args.slice(sp + 1)];
+}
+
+// Commands not in this set require `page` to be set (i.e. `launch` already
+// ran) — checked once in runLine() instead of repeating the guard in every
+// handler below.
+const NO_PAGE_REQUIRED = new Set(['launch', 'help', 'quit']);
+
 const COMMANDS = {
   async launch() {
     if (browser) return console.log('already launched');
@@ -31,13 +43,11 @@ const COMMANDS = {
   },
 
   async nav(url) {
-    if (!page) return console.log('ERROR: launch first');
     await page.goto(url || BASE_URL, { waitUntil: 'load' });
     console.log('nav ->', page.url());
   },
 
   async ss(name) {
-    if (!page) return console.log('ERROR: launch first');
     const f = path.join(SHOT_DIR, (name || `ss-${Date.now()}`) + '.png');
     await page.screenshot({ path: f, fullPage: true });
     console.log('screenshot:', f);
@@ -47,7 +57,6 @@ const COMMANDS = {
   // handlers are plain inline attributes, and evaluate() sidesteps any
   // Playwright actionability waits that aren't needed on this simple DOM.
   async click(sel) {
-    if (!page) return console.log('ERROR: launch first');
     const r = await page.evaluate((s) => {
       const el = document.querySelector(s);
       if (!el) return 'NOT_FOUND';
@@ -57,10 +66,14 @@ const COMMANDS = {
     console.log('click', sel, '->', r);
   },
 
+  // Matches any element with an inline onclick= handler — the app's sole
+  // interactivity pattern (see CLAUDE.md: every handler is wired via
+  // onclick=/onchange= and exposed on `window`), so this covers buttons,
+  // chips, and any future clickable element without needing a tag/class
+  // allowlist that drifts from the markup.
   async 'click-text'(text) {
-    if (!page) return console.log('ERROR: launch first');
     const r = await page.evaluate((t) => {
-      const els = [...document.querySelectorAll('button, a, [role="button"], .btn, .chip')];
+      const els = [...document.querySelectorAll('[onclick]')];
       const el = els.find((e) => e.textContent?.trim() === t) ?? els.find((e) => e.textContent?.includes(t));
       if (!el) return 'NOT_FOUND';
       el.click();
@@ -72,25 +85,18 @@ const COMMANDS = {
   // fill() goes through Playwright's real input pipeline, which fires the
   // `oninput=` handlers the app relies on (e.g. force-uppercase on vol/client).
   async fill(args) {
-    if (!page) return console.log('ERROR: launch first');
-    const sp = args.indexOf(' ');
-    const sel = sp === -1 ? args : args.slice(0, sp);
-    const value = sp === -1 ? '' : args.slice(sp + 1);
+    const [sel, value] = splitArg(args);
     await page.fill(sel, value);
     console.log('fill', sel, '=', JSON.stringify(value));
   },
 
   async select(args) {
-    if (!page) return console.log('ERROR: launch first');
-    const sp = args.indexOf(' ');
-    const sel = sp === -1 ? args : args.slice(0, sp);
-    const value = sp === -1 ? '' : args.slice(sp + 1);
+    const [sel, value] = splitArg(args);
     await page.selectOption(sel, value);
     console.log('select', sel, '=', JSON.stringify(value));
   },
 
   async wait(sel) {
-    if (!page) return console.log('ERROR: launch first');
     try {
       await page.waitForSelector(sel, { timeout: 10_000 });
       console.log('found:', sel);
@@ -100,7 +106,6 @@ const COMMANDS = {
   },
 
   async eval(expr) {
-    if (!page) return console.log('ERROR: launch first');
     try {
       console.log(JSON.stringify(await page.evaluate(expr)));
     } catch (e) {
@@ -109,18 +114,15 @@ const COMMANDS = {
   },
 
   async text(sel) {
-    if (!page) return console.log('ERROR: launch first');
     console.log(await page.evaluate((s) => (s ? document.querySelector(s) : document.body)?.innerText ?? '(null)', sel || null));
   },
 
   async type(text) {
-    if (!page) return console.log('ERROR: launch first');
     await page.keyboard.type(text, { delay: 30 });
     console.log('typed:', JSON.stringify(text));
   },
 
   async press(key) {
-    if (!page) return console.log('ERROR: launch first');
     await page.keyboard.press(key);
     console.log('pressed:', key);
   },
@@ -157,6 +159,10 @@ async function runLine(line) {
   const fn = COMMANDS[cmd];
   if (!fn) {
     console.log('unknown:', cmd, '— try: help');
+    return rl.prompt();
+  }
+  if (!page && !NO_PAGE_REQUIRED.has(cmd)) {
+    console.log('ERROR: launch first');
     return rl.prompt();
   }
   try {
