@@ -269,7 +269,9 @@ function reconstructPage(words, cfg) {
 }
 
 function rowToFields(row, cfg) {
-  const mnum = row.c0.match(/M#\s*(\d+)/);
+  // `#+` (pas juste `#`) : certains plannings rendent occasionnellement
+  // « M##31309 » (double dièse, glitch TCPDF) au lieu de « M#31309 ».
+  const mnum = row.c0.match(/M#+\s*(\d+)/);
   const client = clientFromColumn(row.c2, cfg, !!mnum);
   const isAirport = client.tok === cfg.clients.airportToken || (!client.tok && !!mnum);
   const booking = isAirport ? (mnum ? mnum[1] : row.ref) : (client.ref || row.ref);

@@ -553,6 +553,26 @@ un bug déjà corrigé) :
     directement sur l'espace de noms ESM (il faut lire `mod.default`) — sans
     ce fix les tests d'intégration PDF ne s'exécutaient jamais et
     l'échec passait inaperçu.
+25. **Bug booking ACA erroné — double dièse `M##31309`** : sur un planning
+    du 23/07, un unique M# (parmi une vingtaine sur le même PDF) était rendu
+    `M##31309` (deux `#`) au lieu de `M#31309` — glitch ponctuel côté TCPDF,
+    pas un nouveau format à supporter. Le regex `M#\s*(\d+)` de `mnum`
+    n'autorisait aucun caractère entre `M#` et les chiffres, donc ne
+    matchait pas du tout : `mnum` restait `null`, et comme `client.tok`
+    valait bien `'ACA'` (la colonne Client, elle, était intacte), `isAirport`
+    restait vrai — mais `booking` retombait sur `row.ref` (la réf brute
+    `11483-420`) au lieu du numéro M# attendu (`31309`), un mauvais numéro
+    affiché dans un rapport déjà généré (bug utilisateur signalé comme
+    « erreur majeure »). Fix : `M#+\s*(\d+)` (un ou plusieurs `#`) dans les
+    **quatre** occurrences du pattern (`parser-pdf.js` + trois dans
+    `parser-text.js` — même piège potentiel sur le moteur copier-coller,
+    jamais testé isolément mais corrigé par précaution). Fixture de
+    régression ajoutée : `tests/fixtures/planning-23-double-hash.pdf`
+    (porteur Damien P., vol EJU1687 → booking attendu `31309`). **Piège à
+    garder en tête** : toute regex qui suppose un format figé pour un
+    séparateur censé être constant (ici littéralement `#`) doit rester
+    tolérante à une variation ponctuelle du rendu PDF — même leçon que le
+    fix historique du `?` en tête de numéro de téléphone (point 10).
 
 ---
 
@@ -589,6 +609,9 @@ PDF source) :
   fragmenté sur 2 lignes, faux positif contact Nathan D.
 - `planning-30.pdf` (30/06) — contient `MY FRENCH RIVIERA` et `G-OPS`
   (téléphone client dans la colonne client). **Fixture de test.**
+- `planning-23-double-hash.pdf` (23/07) — contient `M##31309` (double dièse,
+  glitch TCPDF ponctuel), valide le fix du regex `mnum` (booking ACA erroné,
+  voir §5 point 25). **Fixture de test.**
 
 **Protocole minimal avant de livrer un changement touchant
 extraction/attribution** :
