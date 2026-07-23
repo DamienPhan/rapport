@@ -70,7 +70,7 @@ polling is how you know it's safe to read the screen.
 | `nav <url>` | navigate to a different URL |
 | `ss [name]` | full-page screenshot → `/tmp/shots/<name>.png` |
 | `click <css-sel>` | click element via DOM `.click()` |
-| `click-text <text>` | click first button/link/`.btn`/`.chip` whose text matches (no quotes — see Gotchas) |
+| `click-text <text>` | click first `[onclick]` element whose text matches (no quotes — see Gotchas) |
 | `fill <css-sel> <value>` | Playwright `fill()` — goes through the real input pipeline, fires `oninput=` handlers |
 | `select <css-sel> <value>` | `selectOption()` — use this for `<select>` dropdowns, not `fill` |
 | `type <text>` | keyboard-type into whatever is currently focused |

@@ -77,6 +77,27 @@ test('generateReportText affiche N/A pour hors-format/cage vides', () => {
   assert.ok(txt.includes('Cage animal : N/A'));
 });
 
+test('generateReportText affiche N/A pour les champs non optionnels vides', () => {
+  const m = createMission();
+  Object.assign(m, { booking: '', date: '', client: '', vol: '', terminal: '', type: 'TRS', pax: '1', porteurs: '', lieuRencontre: '', lieuDepose: '' });
+  const txt = generateReportText(m);
+  assert.ok(txt.includes('Booking : N/A'));
+  assert.ok(txt.includes('Date : N/A'));
+  assert.ok(txt.includes('Client : N/A'));
+  assert.ok(txt.includes('Vol - code IATA : N/A'));
+  assert.ok(txt.includes('Terminal : N/A'));
+  assert.ok(txt.includes('Lieu de rencontre : N/A'));
+  assert.ok(txt.includes('Lieu de dépose : N/A'));
+  assert.ok(txt.includes('Nombre de porteurs : N/A'));
+});
+
+test('generateReportText omet le greeteur (optionnel) sans afficher N/A', () => {
+  const m = createMission();
+  Object.assign(m, { booking: 'B', date: '30/06', client: 'C', vol: 'V', terminal: '1', type: 'ARR', pax: '1', greeteur: '' });
+  const txt = generateReportText(m);
+  assert.ok(!txt.includes('Greeteur'));
+});
+
 console.log('\n── Tests d\'intégration (PDF de référence) ───────────');
 
 const fixturesDir = join(__dirname, 'fixtures');
