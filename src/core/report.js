@@ -21,35 +21,42 @@ export function resolvePlace(m, field) {
  * @param {object} m mission (valeurs déjà synchronisées depuis l'UI)
  * @returns {string}
  */
+/** Affiche la valeur, ou 'N/A' si vide/absente (champs non optionnels du rapport). */
+function naIfEmpty(v) {
+  return String(v ?? '').trim() || 'N/A';
+}
+
 export function generateReportText(m) {
   const hfN = parseInt(m.bagHorsFormat, 10) || 0;
   const caN = parseInt(m.bagCage, 10) || 0;
   const hfDisp = hfN > 0 ? String(hfN) : 'N/A';
   const caDisp = caN > 0 ? String(caN) : 'N/A';
   const total = (parseInt(m.bagStandard, 10) || 0) + hfN + caN;
-  const lieuRencontre = resolvePlace(m, 'lieuRencontre');
-  const lieuDepose = resolvePlace(m, 'lieuDepose');
-  const clientLine = m.greeteur ? `${m.client} - Greeteur : ${m.greeteur}` : m.client;
+  const lieuRencontre = naIfEmpty(resolvePlace(m, 'lieuRencontre'));
+  const lieuDepose = naIfEmpty(resolvePlace(m, 'lieuDepose'));
+  // Greeteur reste optionnel : simplement omis quand vide, jamais 'N/A'.
+  const clientLine = m.greeteur ? `${naIfEmpty(m.client)} - Greeteur : ${m.greeteur}` : naIfEmpty(m.client);
+  const bookingDisp = String(m.booking ?? '').trim() ? `#${m.booking}` : 'N/A';
 
   return `1. Informations générales
-Booking : #${m.booking}
-Date : ${m.date}
+Booking : ${bookingDisp}
+Date : ${naIfEmpty(m.date)}
 Client : ${clientLine}
-Pré-booking ou Live : ${m.prebooking}
-Type de service : ${m.type}
-Vol - code IATA : ${m.vol}
-Terminal : ${m.terminal}
-Nombre de passagers : ${m.pax}
+Pré-booking ou Live : ${naIfEmpty(m.prebooking)}
+Type de service : ${naIfEmpty(m.type)}
+Vol - code IATA : ${naIfEmpty(m.vol)}
+Terminal : ${naIfEmpty(m.terminal)}
+Nombre de passagers : ${naIfEmpty(m.pax)}
 
 2. Bagages
-Nombre de bagages Standard : ${m.bagStandard}
+Nombre de bagages Standard : ${naIfEmpty(m.bagStandard)}
 Hors format : ${hfDisp}
 Cage animal : ${caDisp}
 
 Total Bagages pris en charge : ${total}
 
 3. Service
-Détaxe : ${m.detaxe}
+Détaxe : ${naIfEmpty(m.detaxe)}
 Lieu de rencontre : ${lieuRencontre}
 Lieu de dépose : ${lieuDepose}
 
@@ -57,8 +64,8 @@ Lieu de dépose : ${lieuDepose}
 ${m.probleme || 'Aucun problème'}
 
 5. Ressources
-Nombre de porteurs : ${m.porteurs}
+Nombre de porteurs : ${naIfEmpty(m.porteurs)}
 
 6. Qualité
-Satisfaction client : ${m.satisfaction}`;
+Satisfaction client : ${naIfEmpty(m.satisfaction)}`;
 }
