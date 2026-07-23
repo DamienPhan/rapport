@@ -105,6 +105,7 @@ const fixtures = [
   { file: 'Mission-2026-06-22_22_11.pdf', porter: 'Yaris K.', expect: { count: 3, firstVol: 'DL0028' } },
   { file: 'planning-30.pdf', porter: 'Damien P.', expect: { hasClient: 'MY FRENCH RIVIERA', clientPhone: '+966505609430' } },
   { file: 'planning-30.pdf', porter: 'Yanis P.', expect: { hasClient: 'DC Aviation G-OPS' } },
+  { file: 'planning-23-double-hash.pdf', porter: 'Damien P.', expect: { hasVol: 'EJU1687', booking: '31309' } },
 ];
 
 async function runPdfTests() {
@@ -140,6 +141,11 @@ async function runPdfTests() {
         const m = missions.find((x) => x.client === fx.expect.hasClient);
         assert.ok(m, `client ${fx.expect.hasClient} introuvable`);
         if (fx.expect.clientPhone) assert.strictEqual(m.clientPhone, fx.expect.clientPhone);
+      }
+      if (fx.expect.hasVol) {
+        const m = missions.find((x) => x.vol === fx.expect.hasVol);
+        assert.ok(m, `vol ${fx.expect.hasVol} introuvable`);
+        if (fx.expect.booking) assert.strictEqual(m.booking, fx.expect.booking);
       }
     });
   }

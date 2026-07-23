@@ -55,7 +55,7 @@ function extractMissionsPdfjs(text, porterName){
     // W_after: window starting at the porter's line — used for M#, clientRef, greeter
     // to avoid bleeding data from the PREVIOUS mission into this one.
     const W_after = lines.slice(i, hi).join('\n');
-    const mM=W_after.match(/M#\s*(\d+)/);if(mM)mnum=mM[1];
+    const mM=W_after.match(/M#+\s*(\d+)/);if(mM)mnum=mM[1];
     const crM=W_after.match(/\[(20\d{2}-\d{6})\]/);if(crM){clientRef=crM[1];if(!clientTok)clientTok='AGENCY';}
     let vol='',term='';
     const vM=W.match(/N[°o]\s*Vol\s*([A-Za-z]{2,3}\s*\d{2,5}|[A-Za-z0-9]{2,7})/i);
@@ -170,7 +170,7 @@ function extractMissionsCopyPaste(text, porterName){
           // means this row owns no M# (column-dumped Monaco rows).
           if(/^\d{4,6}-\d+/.test(tt)) break;
           if(/^\d{2}\/\d{2}\/\d{4}/.test(tt) && k>1) break;
-          const md=tt.match(/^M#\s*(\d+)$/); if(md && !mnum) mnum=md[1];
+          const md=tt.match(/^M#+\s*(\d+)$/); if(md && !mnum) mnum=md[1];
           const cr=tt.match(/\[(20\d{2}-\d{6})\]/); if(cr && !clientRef) clientRef=cr[1];
         }
         out.push({ref:r, m:mnum, clientRef});
@@ -349,7 +349,7 @@ function extractMissionsCopyPaste(text, porterName){
     const isLive = /^20\d{2}-\d{6}$/.test(bm[1]);
     let mNum = '';
     const tail = text.slice(bm.index, bm.index + 30);
-    const mm = tail.match(/M#\s*(\d+)/);
+    const mm = tail.match(/M#+\s*(\d+)/);
     if(mm) mNum = mm[1];
     const around = text.slice(bm.index, bm.index + 90);
     const tm = around.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
