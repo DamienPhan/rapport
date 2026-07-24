@@ -586,18 +586,25 @@ un bug déjà corrigé) :
     téléphone du porteur voisin (cas réel : `Greeter: Antoine` sans numéro
     récupérait le `06 10 88 78 90` de `Bryan L`, la mission suivante — même
     famille de bug que le débordement historique de `contactPhone`, voir
-    §3.1/§7). Fix : la fenêtre de `enrichWithPhones` est désormais bornée
-    par la prochaine réf booking (`\d{4,6}-\d+`), comme `contactPhone` le
-    fait déjà. En plus, séparateurs élargis par précaution (`[\s:,\-–]+` /
-    `[\s:\-–]*`) dans les **cinq** emplacements du pattern greeter
-    (`nce-wellcom.js`, `parser-pdf.js`, `parser-text.js` ×2) pour tolérer
-    un tiret entre le libellé et le nom, motif observé ailleurs dans le
-    même PDF (`Jean-François – +33...`, cas différent — sans libellé
-    « Greeter » du tout — resté hors périmètre de ce fix). Deux tests
-    unitaires ajoutés sur `enrichWithPhones` (texte synthétique, plus
-    robustes que des coordonnées PDF) + fixture
+    §3.1/§7). Fix : la fenêtre de `enrichWithPhones` est désormais bornée à
+    200 caractères ET à la prochaine réf booking (`\d{4,6}-\d+`), le slice
+    étant fait *avant* la recherche de réf pour ne jamais scanner au-delà sur
+    un gros planning (8 pages / 40+ missions) — même principe que
+    `contactPhone`, factorisé en une constante `BOOKING_REF_RE` partagée.
+    Deux tests unitaires ajoutés sur `enrichWithPhones` (texte synthétique,
+    plus robustes que des coordonnées PDF) + fixture
     `tests/fixtures/planning-24-greeter-no-colon.pdf` (Falco P., vol EY37 →
-    greeteur `Louane`, extrait sans `:`).
+    greeteur `Louane`, extrait sans `:`). **Fausse piste corrigée en revue** :
+    une première version élargissait aussi les séparateurs (`[\s:,\-–]+` /
+    `[\s:\-–]*`) pour tolérer un tiret entre « Greeter » et le nom, motif
+    observé ailleurs dans le même PDF (`Jean-François – +33...`) — mais ce
+    cas précis n'a **pas** le mot « Greeter » du tout (fallback nom+tel sans
+    libellé, non concerné), donc rien ne justifiait le changement ; pire, il
+    ouvrait un risque réel (`code-review` l'a détecté) : un greeter non
+    assigné rendu « Greeter - » suivi du mot de la colonne Type capturerait
+    ce mot comme faux nom (ex. « Greeter - Arrivée » → greeteur `"Arrivée"`).
+    Reverti dans les 4 emplacements concernés — la classe reste `[\s:,]+` /
+    `[\s:]*`, jamais testée en défaut sur aucun planning réel jusqu'ici.
 
 ---
 

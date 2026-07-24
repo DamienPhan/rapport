@@ -117,7 +117,7 @@ function greeterInfoFromLines(lines, porter, cfg) {
   const blockWords = cfg.noteLabels.greeterBlockWords;
   // Passe 1 : libellé explicite « Greeter: NOM » (':' pas toujours présent, voir cfg.noteLabels.greeter)
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/greete?r[s]?[\s:,\-–]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
+    const m = lines[i].match(/greete?r[s]?[\s:,]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
     if (m) {
       const gname = m[1].trim();
       if (blockWords.indexOf(gname.toLowerCase()) === -1) {
