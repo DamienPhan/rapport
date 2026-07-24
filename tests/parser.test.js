@@ -18,6 +18,7 @@ import { wordsFromTextContent, missionsForPorter } from '../src/core/parser-pdf.
 import { createMission, applyPlaceDefaults, validateMission, markNoShow } from '../src/core/mission.js';
 import { generateReportText } from '../src/core/report.js';
 import { normalizePhone, extractClientPhone } from '../src/core/phone.js';
+import { enrichWithPhones } from '../src/core/enrich.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -98,6 +99,22 @@ test('generateReportText omet le greeteur (optionnel) sans afficher N/A', () => 
   assert.ok(!txt.includes('Greeteur'));
 });
 
+test('enrichWithPhones trouve le téléphone du greeter sans ":" (« Greeter NOM »)', () => {
+  const missions = [{ booking: '31224', greeteur: 'Louane', greeteurPhone: '' }];
+  const fullText = 'NCE Falco P. +33 6 67 45 94 86 Greeter Louane +33 7 60 29 35 81 Arrivée\n11483-460 M#29999 ...';
+  enrichWithPhones(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].greeteurPhone, '+33760293581');
+});
+
+test('enrichWithPhones ne déborde pas sur le téléphone de la mission suivante quand le greeter n\'a pas de numéro propre', () => {
+  const missions = [{ booking: '10723-53', greeteur: 'Antoine', greeteurPhone: '' }];
+  // « Antoine » n'a pas de numéro : le prochain numéro dans le texte appartient
+  // au porteur de la mission suivante (bornée par la réf booking « 11483-466 »).
+  const fullText = 'Falco P. +33 6 67 45 94 86 Greeter: Antoine Arrivée\n11483-466 M#29733 ...NCE Bryan L 06 10 88 78 90 Greeter\n';
+  enrichWithPhones(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].greeteurPhone, '');
+});
+
 console.log('\n── Tests d\'intégration (PDF de référence) ───────────');
 
 const fixturesDir = join(__dirname, 'fixtures');
@@ -106,6 +123,7 @@ const fixtures = [
   { file: 'planning-30.pdf', porter: 'Damien P.', expect: { hasClient: 'MY FRENCH RIVIERA', clientPhone: '+966505609430' } },
   { file: 'planning-30.pdf', porter: 'Yanis P.', expect: { hasClient: 'DC Aviation G-OPS' } },
   { file: 'planning-23-double-hash.pdf', porter: 'Damien P.', expect: { hasVol: 'EJU1687', booking: '31309' } },
+  { file: 'planning-24-greeter-no-colon.pdf', porter: 'Falco P.', expect: { hasVol: 'EY37', greeteur: 'Louane' } },
 ];
 
 async function runPdfTests() {
@@ -146,6 +164,7 @@ async function runPdfTests() {
         const m = missions.find((x) => x.vol === fx.expect.hasVol);
         assert.ok(m, `vol ${fx.expect.hasVol} introuvable`);
         if (fx.expect.booking) assert.strictEqual(m.booking, fx.expect.booking);
+        if (fx.expect.greeteur) assert.strictEqual(m.greeteur, fx.expect.greeteur);
       }
     });
   }
