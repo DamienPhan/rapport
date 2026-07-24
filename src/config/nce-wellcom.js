@@ -65,7 +65,10 @@ export const siteConfig = {
    * Adapter si un autre site utilise une terminologie différente.
    */
   noteLabels: {
-    greeter: /greete?r[s]?[\s:,]+/i,
+    // [\s:,\-–]+ : au moins un séparateur entre le libellé et le nom, mais
+    // pas forcément ':' — le planning omet parfois les deux-points
+    // (« Greeter NOM ») ou utilise un tiret (« Greeter - NOM »).
+    greeter: /greete?r[s]?[\s:,\-–]+/i,
     contactDriver: /contact\s+chauffeur/i,
     /** Mots qui ne sont jamais un nom de greeter (faux positifs à exclure). */
     greeterBlockWords: ['a', 'à', 'venir', 'voir'],

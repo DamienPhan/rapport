@@ -72,7 +72,7 @@ function extractMissionsPdfjs(text, porterName){
     // Greeter: only search AFTER the porter line (not before) to avoid
     // bleeding the previous mission's greeter into this window.
     // (W_after already declared above — reused here)
-    let greeter=''; const gm2=W_after.match(/gre{1,2}t{1,2}e?r[\s:]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
+    let greeter=''; const gm2=W_after.match(/gre{1,2}t{1,2}e?r[\s:\-–]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
     if(gm2){ const gn=gm2[1].trim(); if(!['a','à','venir','voir'].includes(gn.toLowerCase())) greeter=gn; }
     // WELL'COM AIR: check whole window (not just booking ref line)
     if(!clientTok && /WELL'COM\s+AIR/i.test(W)) clientTok='WELLCOM';
@@ -287,7 +287,7 @@ function extractMissionsCopyPaste(text, porterName){
   // line (some plannings drop the label), bounded by the next porter name so a
   // neighbour's contact never bleeds in.
   function greeterFromScope(s){
-    const lab = s.match(/gre{1,2}t{1,2}e?r[\s:]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
+    const lab = s.match(/gre{1,2}t{1,2}e?r[\s:\-–]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
     if(lab){ const g = lab[1].trim(); if(['a','à','venir','voir'].indexOf(g.toLowerCase())===-1) return g; }
     const lines = s.split('\n');
     for(let i=1;i<lines.length;i++){

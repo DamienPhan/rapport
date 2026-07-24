@@ -573,6 +573,31 @@ un bug déjà corrigé) :
     séparateur censé être constant (ici littéralement `#`) doit rester
     tolérante à une variation ponctuelle du rendu PDF — même leçon que le
     fix historique du `?` en tête de numéro de téléphone (point 10).
+26. **Greeter sans « : » et téléphone qui déborde sur la mission voisine** :
+    signalé par l'utilisateur (« des fois après Greeteur il n'y a pas de
+    ":" ») sur un planning du 24/07. Investigation : le nom du greeter
+    (`greeterInfoFromLines`, `greeterFromScope`) était déjà extrait
+    correctement sans `:` (`[\s:,]+`/`[\s:]*` acceptent un simple espace,
+    « Greeter NOM » fonctionnait déjà) — mais l'audit a révélé un vrai bug
+    voisin dans `enrichWithPhones` (`src/core/enrich.js`) : quand un greeter
+    labellisé (avec ou sans `:`) n'a **aucun téléphone propre** dans le
+    texte, la fenêtre de recherche du numéro (200 caractères après le nom,
+    non bornée) débordait sur la mission suivante et lui volait le
+    téléphone du porteur voisin (cas réel : `Greeter: Antoine` sans numéro
+    récupérait le `06 10 88 78 90` de `Bryan L`, la mission suivante — même
+    famille de bug que le débordement historique de `contactPhone`, voir
+    §3.1/§7). Fix : la fenêtre de `enrichWithPhones` est désormais bornée
+    par la prochaine réf booking (`\d{4,6}-\d+`), comme `contactPhone` le
+    fait déjà. En plus, séparateurs élargis par précaution (`[\s:,\-–]+` /
+    `[\s:\-–]*`) dans les **cinq** emplacements du pattern greeter
+    (`nce-wellcom.js`, `parser-pdf.js`, `parser-text.js` ×2) pour tolérer
+    un tiret entre le libellé et le nom, motif observé ailleurs dans le
+    même PDF (`Jean-François – +33...`, cas différent — sans libellé
+    « Greeter » du tout — resté hors périmètre de ce fix). Deux tests
+    unitaires ajoutés sur `enrichWithPhones` (texte synthétique, plus
+    robustes que des coordonnées PDF) + fixture
+    `tests/fixtures/planning-24-greeter-no-colon.pdf` (Falco P., vol EY37 →
+    greeteur `Louane`, extrait sans `:`).
 
 ---
 
@@ -612,6 +637,10 @@ PDF source) :
 - `planning-23-double-hash.pdf` (23/07) — contient `M##31309` (double dièse,
   glitch TCPDF ponctuel), valide le fix du regex `mnum` (booking ACA erroné,
   voir §5 point 25). **Fixture de test.**
+- `planning-24-greeter-no-colon.pdf` (24/07) — contient plusieurs greeters
+  labellisés sans `:` (« Greeter NOM ») et un greeter sans téléphone propre
+  (Antoine), valide le fix de débordement de `enrichWithPhones` (voir §5
+  point 26). **Fixture de test.**
 
 **Protocole minimal avant de livrer un changement touchant
 extraction/attribution** :
