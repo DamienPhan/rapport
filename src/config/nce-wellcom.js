@@ -65,10 +65,13 @@ export const siteConfig = {
    * Adapter si un autre site utilise une terminologie différente.
    */
   noteLabels: {
-    // [\s:,\-–]+ : au moins un séparateur entre le libellé et le nom, mais
-    // pas forcément ':' — le planning omet parfois les deux-points
-    // (« Greeter NOM ») ou utilise un tiret (« Greeter - NOM »).
-    greeter: /greete?r[s]?[\s:,\-–]+/i,
+    // [\s:,]+ : au moins un séparateur entre le libellé et le nom, mais pas
+    // forcément ':' — le planning omet parfois les deux-points (« Greeter NOM »).
+    // Pas de tiret dans cette classe : un greeter non assigné rendu
+    // « Greeter -  » suivi du mot suivant (type de service, etc.) capturerait
+    // ce mot comme faux nom si le tiret était accepté ici (trouvé en revue,
+    // jamais observé dans un planning réel — pas de raison de prendre le risque).
+    greeter: /greete?r[s]?[\s:,]+/i,
     contactDriver: /contact\s+chauffeur/i,
     /** Mots qui ne sont jamais un nom de greeter (faux positifs à exclure). */
     greeterBlockWords: ['a', 'à', 'venir', 'voir'],
