@@ -15,7 +15,7 @@ import assert from 'node:assert';
 
 import { siteConfig } from '../src/config/nce-wellcom.js';
 import { wordsFromTextContent, missionsForPorter } from '../src/core/parser-pdf.js';
-import { createMission, applyPlaceDefaults, validateMission, markNoShow } from '../src/core/mission.js';
+import { createMission, applyPlaceDefaults, validateMission, markNoShow, syncDefaults } from '../src/core/mission.js';
 import { generateReportText } from '../src/core/report.js';
 import { normalizePhone, extractClientPhone } from '../src/core/phone.js';
 import { enrichWithPhones } from '../src/core/enrich.js';
@@ -61,6 +61,20 @@ test('markNoShow garde l\'identité, met le reste à N/A', () => {
   assert.strictEqual(m.vol, 'AF123');
   assert.strictEqual(m.pax, 'N/A');
   assert.strictEqual(m.probleme, 'NO SHOW');
+});
+
+test('createMission ne fait jamais hériter les bagages hors format/cage de la mission précédente', () => {
+  const m1 = createMission();
+  m1.bagHorsFormat = '3';
+  m1.bagCage = '2';
+  // Simule ce que fait generateReport() : les valeurs saisies deviennent les
+  // "préférences glissantes" globales (comportement voulu pour détaxe/lieux/
+  // satisfaction, mais PAS pour des comptes de bagages propres à une mission).
+  syncDefaults({ bagStandard: m1.bagStandard, bagHorsFormat: m1.bagHorsFormat, bagCage: m1.bagCage });
+
+  const m2 = createMission();
+  assert.strictEqual(m2.bagHorsFormat, '0');
+  assert.strictEqual(m2.bagCage, '0');
 });
 
 test('applyPlaceDefaults applique la table de config', () => {

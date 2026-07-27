@@ -306,12 +306,15 @@ cliquables, §3.1). Le type accepte désormais **`TRS`** (transit terminal à
 terminal) en plus de ARR/DEP/Service.
 
 **Défauts hardcodés dans `emptyMission()`, PAS hérités de `defaults`** :
-`bagStandard` vaut **`'1'`** et `probleme` vaut **`''`**. C'est volontaire —
-`defaults` est un objet mutable que `syncAll` met à jour avec la dernière
-saisie ; si ces champs lisaient `defaults`, chaque nouvelle mission extraite
-hériterait de la valeur de la mission précédente (bug réel signalé : « le
-nombre de bagages garde le dernier qu'on avait mis »). Les missions extraites
-du PDF n'indiquent jamais le nombre de bagages réel, d'où le défaut à 1.
+`bagStandard` vaut **`'1'`**, `bagHorsFormat`/`bagCage` valent **`'0'`**, et
+`probleme` vaut **`''`**. C'est volontaire — `defaults` est un objet mutable
+que `syncAll` met à jour avec la dernière saisie ; si ces champs lisaient
+`defaults`, chaque nouvelle mission extraite hériterait de la valeur de la
+mission précédente (bug réel signalé deux fois : d'abord sur `bagStandard`,
+puis à nouveau sur `bagHorsFormat`/`bagCage` — « je mets 3 bagages hors
+format → je charge un autre PDF → les 3 sont encore là », voir §5 point 27).
+Les missions extraites du PDF n'indiquent jamais le nombre de bagages réel,
+d'où les défauts à 1/0/0.
 
 ### Règles de routage par défaut (`applyLieuDefaults`, appliqué une fois à
 l'extraction, jamais réécrasé par l'undo ou l'édition manuelle)
@@ -605,6 +608,28 @@ un bug déjà corrigé) :
     ce mot comme faux nom (ex. « Greeter - Arrivée » → greeteur `"Arrivée"`).
     Reverti dans les 4 emplacements concernés — la classe reste `[\s:,]+` /
     `[\s:]*`, jamais testée en défaut sur aucun planning réel jusqu'ici.
+27. **Bagages hors format/cage « collants » (même bug que le point 16, jamais
+    corrigé pour ces deux champs)** : signalé par l'utilisateur (« je mets 3
+    bagages hors format → je charge un autre PDF → les 3 sont encore là sur
+    les nouvelles missions »). Cause identique au point 16 : `createMission()`
+    lisait `defaults.bagHorsFormat`/`defaults.bagCage` (objet mutable mis à
+    jour par `syncDefaults` à chaque génération de rapport), et aucun moteur
+    d'extraction (PDF ni copier-coller) ne renseigne jamais ces deux champs —
+    donc une mission nouvellement extraite ou ajoutée manuellement héritait
+    silencieusement du dernier compte saisi sur une mission précédente, y
+    compris après un changement de porteur ou le chargement d'un PDF
+    différent. Le fix du point 16 n'avait hardcodé que `bagStandard` ; jamais
+    étendu à `bagHorsFormat`/`bagCage` à l'époque. Fix : les deux champs sont
+    désormais hardcodés à `'0'` dans `createMission()`, comme `bagStandard`
+    l'est à `'1'` — **ne jamais les relier à `defaults`** (même piège que le
+    point 16, à ne pas réintroduire). `defaults.bagHorsFormat`/`bagCage`
+    restent dans l'objet `defaults` et `syncDefaults` continue de les
+    recevoir (même tolérance qu'existante pour `bagStandard` : état mort mais
+    inoffensif, gardé par cohérence avec l'existant plutôt que retiré). Testé
+    et vérifié dans le navigateur (skill `run-rapport`) : une mission dont le
+    « Hors format » est mis à 3 puis dont le rapport est généré (ce qui
+    déclenche `syncDefaults`) ne contamine plus une mission ajoutée après —
+    elle repart à 0.
 
 ---
 
