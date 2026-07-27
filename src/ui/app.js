@@ -8,14 +8,13 @@ import { siteConfig as CFG } from '../config/nce-wellcom.js';
 import {
   createMission, createManualMission, applyPlaceDefaults,
   markNoShow as coreMarkNoShow, validateMission as coreValidate,
-  syncDefaults, todayStr, fmtTime
+  todayStr, fmtTime
 } from '../core/mission.js';
 import { wordsFromTextContent, missionsForPorter } from '../core/parser-pdf.js';
 import { extractMissions } from '../core/parser-text.js';
 import { enrichWithPhones } from '../core/enrich.js';
 import { generateReportText, resolvePlace } from '../core/report.js';
 import { createSessionStore } from '../store/session.js';
-import { defaults } from '../core/mission.js';
 
 let missions = [];
 let lastPdfPages = null;
@@ -530,15 +529,6 @@ function generateReport(idx){
 
   document.getElementById(fieldId(idx,'pre')).textContent = report;
   document.getElementById(fieldId(idx,'output')).style.display = 'block';
-
-  const m = missions[idx];
-  syncDefaults({
-    prebooking: m.prebooking, detaxe: m.detaxe,
-    lieuRencontre: m.lieuRencontre, lieuRencontreAutre: m.lieuRencontreAutre,
-    lieuDepose: m.lieuDepose, lieuDeposeAutre: m.lieuDeposeAutre,
-    probleme: m.probleme, porteurs: m.porteurs, satisfaction: m.satisfaction,
-    bagStandard: m.bagStandard, bagHorsFormat: m.bagHorsFormat, bagCage: m.bagCage
-  });
 
   copyReport(idx);
 }
