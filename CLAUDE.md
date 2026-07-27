@@ -305,16 +305,21 @@ déjà régressé plusieurs fois pendant le développement.
 cliquables, §3.1). Le type accepte désormais **`TRS`** (transit terminal à
 terminal) en plus de ARR/DEP/Service.
 
-**Défauts hardcodés dans `emptyMission()`, PAS hérités de `defaults`** :
-`bagStandard` vaut **`'1'`**, `bagHorsFormat`/`bagCage` valent **`'0'`**, et
-`probleme` vaut **`''`**. C'est volontaire — `defaults` est un objet mutable
-que `syncAll` met à jour avec la dernière saisie ; si ces champs lisaient
-`defaults`, chaque nouvelle mission extraite hériterait de la valeur de la
-mission précédente (bug réel signalé deux fois : d'abord sur `bagStandard`,
-puis à nouveau sur `bagHorsFormat`/`bagCage` — « je mets 3 bagages hors
-format → je charge un autre PDF → les 3 sont encore là », voir §5 point 27).
-Les missions extraites du PDF n'indiquent jamais le nombre de bagages réel,
-d'où les défauts à 1/0/0.
+**Tous les champs de `createMission()` sont des constantes fixes** (plus
+d'objet `defaults`/`syncDefaults` mutable — **supprimé**, voir §5 points
+27-28). Une nouvelle mission (extraction, changement de porteur, ajout
+manuel) ne doit jamais hériter d'une valeur saisie sur une AUTRE mission,
+quel que soit le champ : `bagStandard` vaut `'1'`, `bagHorsFormat`/`bagCage`
+valent `'0'`, `probleme` vaut `''`, `detaxe` vaut `'Non'`, `lieuRencontre`
+vaut `'Dépose minute'`, `porteurs` vaut `'1'`, `satisfaction` vaut
+`'Excellente'`, etc. Historique : le mécanisme `defaults` (« préférences
+glissantes ») pré-remplissait volontairement certains champs avec la
+dernière saisie, jusqu'à ce que l'utilisateur signale le même bug deux fois
+de suite (d'abord `bagStandard`, puis `bagHorsFormat`/`bagCage`, puis
+explicitement pour « tous les champs ») — le mécanisme entier a été retiré
+plutôt que corrigé champ par champ. Aucune extraction (PDF ou copier-coller)
+ne renseigne jamais ces champs, d'où des valeurs de repli fixes plutôt
+qu'une extraction réelle.
 
 ### Règles de routage par défaut (`applyLieuDefaults`, appliqué une fois à
 l'extraction, jamais réécrasé par l'undo ou l'édition manuelle)
@@ -622,14 +627,34 @@ un bug déjà corrigé) :
     étendu à `bagHorsFormat`/`bagCage` à l'époque. Fix : les deux champs sont
     désormais hardcodés à `'0'` dans `createMission()`, comme `bagStandard`
     l'est à `'1'` — **ne jamais les relier à `defaults`** (même piège que le
-    point 16, à ne pas réintroduire). `defaults.bagHorsFormat`/`bagCage`
-    restent dans l'objet `defaults` et `syncDefaults` continue de les
-    recevoir (même tolérance qu'existante pour `bagStandard` : état mort mais
-    inoffensif, gardé par cohérence avec l'existant plutôt que retiré). Testé
-    et vérifié dans le navigateur (skill `run-rapport`) : une mission dont le
-    « Hors format » est mis à 3 puis dont le rapport est généré (ce qui
-    déclenche `syncDefaults`) ne contamine plus une mission ajoutée après —
-    elle repart à 0.
+    point 16, à ne pas réintroduire). À ce stade, `defaults.bagHorsFormat`/
+    `bagCage` étaient laissés dans l'objet `defaults` par cohérence avec
+    l'existant (même tolérance qu'alors pour `bagStandard`) — **revu au point
+    28 ci-dessous, `defaults` a depuis été supprimé entièrement**. Testé et
+    vérifié dans le navigateur (skill `run-rapport`) : une mission dont le
+    « Hors format » est mis à 3 puis dont le rapport est généré ne contamine
+    plus une mission ajoutée après — elle repart à 0.
+28. **Suppression complète du mécanisme `defaults`/`syncDefaults`** : juste
+    après le fix du point 27, l'utilisateur a précisé que le même problème
+    devait être corrigé **« sur tous les champs, pas que ceux-là »** — pas
+    seulement les bagages, mais aussi détaxe, lieu de rencontre/dépose,
+    nombre de porteurs, satisfaction, pré-booking/live, qui lisaient encore
+    tous `defaults.X` (l'objet mutable des « préférences glissantes »,
+    volontaire à l'origine — pratique si le porteur ressaisit souvent les
+    mêmes valeurs — mais l'utilisateur a tranché : il ne veut plus de ce
+    comportement du tout). Plutôt que corriger champ par champ comme au point
+    27 (ce qui aurait laissé le mécanisme en place pour de futurs champs et
+    risqué une troisième régression du même genre), **le mécanisme entier a
+    été retiré** : l'objet `defaults`, la fonction `syncDefaults()` et son
+    appel dans `generateReport()` (`src/ui/app.js`) ont été supprimés.
+    `createMission()` ne lit plus que des constantes fixes pour tous ses
+    champs. Effet de bord positif : l'import mort `import { defaults } from
+    '../core/mission.js'` en tête de `src/ui/app.js` (jamais utilisé,
+    probablement un reliquat) a été nettoyé au passage. Test unitaire étendu
+    pour couvrir tous les champs concernés (pas seulement les bagages) ;
+    revérifié dans le navigateur (détaxe/satisfaction/porteurs modifiés sur
+    une mission, rapport généré, nouvelle mission ajoutée → repart bien des
+    valeurs fixes, pas de celles saisies).
 
 ---
 

@@ -20,52 +20,31 @@ export function fmtTime(mins) {
 }
 
 /**
- * Valeurs par défaut d'une mission, mutées par l'UI via syncDefaults.
- * NB : bagStandard et probleme NE lisent jamais ces défauts (voir createMission).
- */
-export const defaults = {
-  prebooking: 'PRÉ-BOOKING',
-  detaxe: 'Non',
-  lieuRencontre: 'Dépose minute',
-  lieuRencontreAutre: '',
-  lieuDepose: 'Tapis bagage',
-  lieuDeposeAutre: '',
-  probleme: 'Non',
-  porteurs: '1',
-  satisfaction: 'Excellente',
-  bagStandard: '1',
-  bagHorsFormat: '0',
-  bagCage: '0',
-};
-
-/** Met à jour les valeurs par défaut (préférences glissantes de l'UI). */
-export function syncDefaults(partial) {
-  Object.assign(defaults, partial);
-}
-
-/**
  * Crée une mission vierge.
- * bagStandard='1', bagHorsFormat='0', bagCage='0' et probleme='' sont
- * volontairement HARDCODÉS (jamais hérités de `defaults`) : sinon une
- * nouvelle mission hériterait du dernier nombre de bagages saisi sur une
- * AUTRE mission (bug signalé : « je mets 3 bagages hors format → je charge
- * un autre PDF → les 3 sont encore là sur les nouvelles missions »), ce qui
- * est faux — aucune extraction (PDF ou copier-coller) n'indique jamais le
- * nombre réel de bagages.
+ *
+ * Tous les champs ci-dessous sont des constantes fixes, JAMAIS lues depuis
+ * un état mutable partagé entre missions (il n'existe plus d'objet
+ * `defaults`/`syncDefaults` — supprimé : voir CLAUDE.md §5 point 27/28).
+ * Une mission nouvellement extraite ou ajoutée manuellement ne doit jamais
+ * hériter d'une valeur saisie sur une AUTRE mission, quel que soit le champ
+ * (bug signalé deux fois : d'abord sur les bagages, puis demandé pour
+ * « tous les champs » — détaxe, lieux, nombre de porteurs, satisfaction...).
+ * Aucun moteur d'extraction (PDF ou copier-coller) ne renseigne jamais ces
+ * champs, d'où des valeurs de repli plutôt qu'une extraction réelle.
  */
 export function createMission() {
   return {
     booking: '', date: todayStr(), vol: '', terminal: '', type: 'DEP',
     client: '', clientPhone: '', greeteur: '', greeteurPhone: '', contactPhone: '', pax: '',
-    prebooking: defaults.prebooking,
-    detaxe: defaults.detaxe,
-    lieuRencontre: defaults.lieuRencontre,
-    lieuRencontreAutre: defaults.lieuRencontreAutre,
+    prebooking: 'PRÉ-BOOKING',
+    detaxe: 'Non',
+    lieuRencontre: 'Dépose minute',
+    lieuRencontreAutre: '',
     lieuDepose: 'AUTO_CHECKIN',
-    lieuDeposeAutre: defaults.lieuDeposeAutre,
+    lieuDeposeAutre: '',
     probleme: '',
-    porteurs: defaults.porteurs,
-    satisfaction: defaults.satisfaction,
+    porteurs: '1',
+    satisfaction: 'Excellente',
     bagStandard: '1',
     bagHorsFormat: '0',
     bagCage: '0',

@@ -15,7 +15,7 @@ import assert from 'node:assert';
 
 import { siteConfig } from '../src/config/nce-wellcom.js';
 import { wordsFromTextContent, missionsForPorter } from '../src/core/parser-pdf.js';
-import { createMission, applyPlaceDefaults, validateMission, markNoShow, syncDefaults } from '../src/core/mission.js';
+import { createMission, applyPlaceDefaults, validateMission, markNoShow } from '../src/core/mission.js';
 import { generateReportText } from '../src/core/report.js';
 import { normalizePhone, extractClientPhone } from '../src/core/phone.js';
 import { enrichWithPhones } from '../src/core/enrich.js';
@@ -63,18 +63,29 @@ test('markNoShow garde l\'identité, met le reste à N/A', () => {
   assert.strictEqual(m.probleme, 'NO SHOW');
 });
 
-test('createMission ne fait jamais hériter les bagages hors format/cage de la mission précédente', () => {
+test('createMission ne fait jamais hériter aucun champ d\'une mission précédente (bagages, détaxe, lieux, porteurs, satisfaction...)', () => {
   const m1 = createMission();
-  m1.bagHorsFormat = '3';
-  m1.bagCage = '2';
-  // Simule ce que fait generateReport() : les valeurs saisies deviennent les
-  // "préférences glissantes" globales (comportement voulu pour détaxe/lieux/
-  // satisfaction, mais PAS pour des comptes de bagages propres à une mission).
-  syncDefaults({ bagStandard: m1.bagStandard, bagHorsFormat: m1.bagHorsFormat, bagCage: m1.bagCage });
+  Object.assign(m1, {
+    bagHorsFormat: '3', bagCage: '2', detaxe: 'Oui',
+    lieuRencontre: 'Autre', lieuRencontreAutre: 'Parking B',
+    lieuDepose: 'Autre', lieuDeposeAutre: 'Terminal 3',
+    porteurs: '4', satisfaction: 'Mauvaise', prebooking: 'LIVE',
+  });
 
+  // Une nouvelle mission (extraction, changement de porteur, ajout manuel...)
+  // doit toujours repartir des mêmes valeurs de repli fixes, jamais de celles
+  // saisies sur m1 — il n'existe plus d'état mutable partagé entre missions.
   const m2 = createMission();
   assert.strictEqual(m2.bagHorsFormat, '0');
   assert.strictEqual(m2.bagCage, '0');
+  assert.strictEqual(m2.detaxe, 'Non');
+  assert.strictEqual(m2.lieuRencontre, 'Dépose minute');
+  assert.strictEqual(m2.lieuRencontreAutre, '');
+  assert.strictEqual(m2.lieuDepose, 'AUTO_CHECKIN');
+  assert.strictEqual(m2.lieuDeposeAutre, '');
+  assert.strictEqual(m2.porteurs, '1');
+  assert.strictEqual(m2.satisfaction, 'Excellente');
+  assert.strictEqual(m2.prebooking, 'PRÉ-BOOKING');
 });
 
 test('applyPlaceDefaults applique la table de config', () => {
