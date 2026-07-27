@@ -45,9 +45,13 @@ export function syncDefaults(partial) {
 
 /**
  * Crée une mission vierge.
- * bagStandard='1' et probleme='' sont volontairement HARDCODÉS (jamais hérités
- * de `defaults`) : sinon une nouvelle mission hériterait du dernier nombre de
- * bagages saisi, ce qui est faux (le PDF n'indique jamais le nombre réel).
+ * bagStandard='1', bagHorsFormat='0', bagCage='0' et probleme='' sont
+ * volontairement HARDCODÉS (jamais hérités de `defaults`) : sinon une
+ * nouvelle mission hériterait du dernier nombre de bagages saisi sur une
+ * AUTRE mission (bug signalé : « je mets 3 bagages hors format → je charge
+ * un autre PDF → les 3 sont encore là sur les nouvelles missions »), ce qui
+ * est faux — aucune extraction (PDF ou copier-coller) n'indique jamais le
+ * nombre réel de bagages.
  */
 export function createMission() {
   return {
@@ -63,8 +67,8 @@ export function createMission() {
     porteurs: defaults.porteurs,
     satisfaction: defaults.satisfaction,
     bagStandard: '1',
-    bagHorsFormat: defaults.bagHorsFormat,
-    bagCage: defaults.bagCage,
+    bagHorsFormat: '0',
+    bagCage: '0',
     sortTime: 9999,
     bookingOptions: [],
     flightOptions: [],
