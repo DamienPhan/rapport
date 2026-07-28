@@ -55,26 +55,8 @@ tourner dans le navigateur.
 **Architecture modulaire (v2)** — ES modules natifs, zéro build. La logique
 métier (`core/`, `store/`) est PURE (aucun accès DOM) et réutilisable telle
 quelle lors d'un futur passage natif. Seule `ui/app.js` touche le DOM.
-
-```
-index.html                  Coquille : structure + <link> CSS + <script type=module>
-src/
-├── config/nce-wellcom.js   ⭐ TOUTE la spécificité du site (clé de l'upscaling)
-├── core/                   Logique métier PURE (zéro DOM)
-│   ├── parser-pdf.js        Extraction PDF par coordonnées (moteur principal)
-│   ├── parser-text.js       Extraction copier-coller (moteur de repli)
-│   ├── phone.js             normalizePhone, extractClientPhone
-│   ├── mission.js           createMission, applyPlaceDefaults, markNoShow, validateMission…
-│   ├── report.js            generateReportText, resolvePlace
-│   └── enrich.js            enrichWithPhones (greeter/chauffeur depuis texte complet)
-├── store/session.js        Persistance localStorage abstraite (createSessionStore)
-├── ui/app.js               SEULE couche DOM : rendu, événements, handlers exposés sur window
-└── styles/main.css         Styles (DA Well'Com Air)
-tests/
-├── parser.test.js          Tests unitaires (core) + intégration (PDF de référence)
-└── fixtures/*.pdf          Plannings de référence
-package.json                scripts : `npm test`, `npm run serve`
-```
+(Structure des fichiers : `find src -type f` — arborescence reconstructible,
+non dupliquée ici.)
 
 **Correspondance avec l'ancienne v1 (monolithe)** : l'ancien `parser.js`
 (IIFE globale `MissionParser`) est devenu `src/core/parser-pdf.js` (module ES
@@ -92,195 +74,14 @@ Aucun backend. `pdf.js` est chargé depuis un CDN. Les modules ES exigent
 
 ---
 
-## 3. Architecture — les deux moteurs d'extraction
-
-> **Note de nommage (refactoring v2).** Les sections 3 à 5 décrivent la
-> *logique* d'extraction, inchangée par le passage en modules. Les anciens
-> noms y subsistent ; correspondance :
-> `parser.js` → `src/core/parser-pdf.js` · `MissionParser.fromPages()` →
-> `missionsForPorter(pages, porter, cfg)` · `emptyMission()` →
-> `createMission()` · `applyLieuDefaults()` → `applyPlaceDefaults(m, cfg.places)` ·
-> `enrichMissionsWithPhones()` → `enrichWithPhones(missions, text, cfg)` ·
-> `saveDefaults()` → `syncDefaults()` · le moteur copier-coller (jadis dans
-> `index.html`) → `src/core/parser-text.js`. Toutes les valeurs jadis en dur
-> dans le parser PDF vivent maintenant dans `src/config/nce-wellcom.js`.
-
-C'est le cœur du projet et la source de la quasi-totalité des itérations
-passées. Il y a **deux chemins d'ingestion totalement indépendants**, avec
-un objectif commun : ne jamais afficher une valeur incertaine comme si elle
-était sûre.
-
-### 3.1 Chemin PDF (`parser.js`) — recommandé, fiable à 100 %
-
-**Constat de départ qui a motivé sa création** : le chemin texte
-(copier-coller) aplatit la table PDF en lignes de texte séquentielles, ce
-qui détruit l'association ligne ↔ mission dès que la mise en page TCPDF
-dispose deux missions en colonnes adjacentes (cas fréquent en fin de
-journée, ou pour les missions agences hors-ACA). Aucune heuristique
-texte ne peut récupérer cette information de façon fiable — elle est
-physiquement perdue à l'aplatissement.
-
-**Solution** : ne jamais aplatir. pdf.js expose pour chaque PDF les
-coordonnées `(x, y)` de chaque fragment de texte (`getTextContent()`).
-`parser.js` reconstruit directement la table à partir de ces coordonnées.
-
-**Géométrie de la table (mesurée sur les PDF réels, page ≈ 841pt large)** :
-
-```
-Col 0  Mission (booking ref + M#)        x ≈ 41
-Col 1  Date/Heures                       x ≈ 88
-Col 2  Client/Passagers                  x ≈ 174
-Col 3  Itinéraire                        x ≈ 376
-Col 4  Véhicule (NCE + porteur + tel)    x ≈ 538
-Col 5  Note au porteur (greeter)         x ≈ 622
-Col 6  Type de services                  x ≈ 716
-```
-
-Ces valeurs (`DEFAULT_CENTERS`) servent de repli ; en pratique
-`detectColumns()` les recalibre dynamiquement en repérant les mots de
-l'en-tête (`Mission`, `Date/Heures`, `Client`...) sur chaque page, ce qui
-absorbe les petites variations de mise en page entre PDF.
-
-**Algorithme** (`reconstructPage`) :
-
-1. **Ancres** : tous les tokens en colonne 0 qui matchent une référence
-   booking (`^\d{4,6}-\d+$`), triés par Y croissant. Chaque ancre = une
-   mission.
-2. **Bandes de lignes** : la page est découpée en bandes Y, une par
-   ancre, bornée par le midpoint avec l'ancre voisine. La première bande
-   commence au bas de l'en-tête (et non à `ancre - marge`), ce qui est
-   nécessaire car le nom du porteur d'une mission agence peut être très
-   au-dessus de sa réf booking.
-3. **Cellules** : chaque token de la bande est assigné à une colonne via
-   `colOf(x, centers)` (le x le plus proche).
-4. **Itinéraire** : colonnes 3+4 fusionnées en ordre de lecture (y, x) —
-   nécessaire car le mot « Terminal » dérive parfois en colonne 4 alors
-   que son numéro retombe en colonne 3 à la ligne suivante.
-5. **Attribution du porteur par rang (clé du fix anti-mauvaise
-   attribution)** : sur les missions agence (hors ACA), le nom du porteur
-   est positionné ~100px **au-dessus** de sa réf booking et peut tomber
-   dans la bande Y de la mission précédente. Le simple bandage horizontal
-   échoue alors (la bande précédente se retrouve réclamée par deux
-   porteurs). Solution : `detectPorterLines()` liste tous les noms de
-   porteur de la page (restreint aux colonnes Véhicule+Note, **colonne 6
-   Type exclue** — sinon « Arrivée » se colle au nom et casse le
-   pattern), triés par Y. S'il y a exactement autant de noms que
-   d'ancres, on aligne le k-ième nom au k-ième ancrage (`ranked = true`,
-   fiable car positionnel). Sinon repli sur l'extraction par bande
-   (`porterFromLines`).
-
-**Champs extraits et leurs pièges connus** :
-
-- **Vol** (`flightFromItinerary`) : `N°\s*Vol\s*([A-Za-z0-9]{2,7})`.
-  Avant matching, le token isolé `NCE` (bruit de la colonne Véhicule
-  fusionnée) est retiré de l'itinéraire — sinon `Terminal NCE 1` casse le
-  parsing du numéro de terminal.
-- **Terminal** : cherché *après* le vol dans l'itinéraire (pour éviter de
-  capturer un faux terminal dans le segment de prise en charge avant le
-  vol). Doit être `\d{1,2}` ou une lettre seule (`B`) ; les noms de
-  villes (Naples, Sofia, London, Budapest) sont exclus. **Lookahead
-  `(?![\d:])` ajouté** pour ne pas capturer un horodatage comme terminal
-  (`Terminal 19:00:00` ne doit pas donner terminal `19` — cas du vol
-  U21733 sur le planning du 24/06).
-- **Greeter** (`greeterInfoFromLines`, anciennement `greeterFromLines`) :
-  retourne désormais un objet `{name, phone}`. D'abord libellé explicite
-  (insensible à la casse — `GREETER:`, `Greeter :`, `greeter::`...), sinon
-  repli sur un nom suivi d'un téléphone sans libellé (`NOM +33...`), borné
-  au porteur suivant pour ne jamais déborder sur la mission voisine. Le
-  téléphone du greeter est extrait inline ou sur la ligne suivante.
-- **Téléphones** (`phoneNorm`, `contactPhoneFrom`, et
-  `enrichMissionsWithPhones` côté `index.html`) : trois numéros peuvent
-  apparaître par mission — le greeter (`greeteurPhone`) et le chauffeur
-  (`contactPhone`, libellé `Contact Chauffeur:` sur les missions agence).
-  `phoneNorm` exige un numéro commençant par `+` ou `0` et ≥ 9 chiffres
-  (rejette les faux positifs issus d'horodatages, ex. `20486466` formé par
-  la fusion `14:20` + `48 64 66`). **Décision importante** :
-  `contactPhoneFrom` a été **retiré de `rowToFields` dans `parser.js`** car
-  la note « Contact Chauffeur » déborde fréquemment de la bande Y vers la
-  mission voisine (faux positif Nathan D héritant du numéro de Bastien D
-  sur le 24/06). Les contacts sont désormais extraits **exclusivement** par
-  `enrichMissionsWithPhones` côté `index.html`, depuis le texte complet
-  avec une fenêtre bornée au prochain booking (et un saut du numéro de
-  planification qui suit immédiatement la réf agence). Les numéros
-  fragmentés sur deux lignes (`+33 6 47\n48 64 66`) sont gérés en aplatissant
-  ~200 caractères après le libellé.
-- **Client/Booking** : ACA → `client.tok === 'ACA'`, booking = `M#xxxxx` ;
-  agence → booking = référence `[2026-xxxxxx]`, client = nom du client
-  (extrait via `M. NOM +téléphone`, pattern le plus fiable, avec repli sur
-  `NOM [2026-xxxxxx]`) ; greeter vide pour les missions agence (pas de
-  greeter, juste un chauffeur). **Clients groupe ALL-CAPS** (ex.
-  `GM FINANCIAL CHILE`, `WD CONSEILS`) reconnus par un fallback regex
-  `^[A-Z][A-Z0-9\s'.&-]{3,}[A-Z0-9]` avec `tok = 'OTHER'` (greeter extrait
-  normalement, contrairement aux missions agence).
-- **Pax** : recherché via `(N)` à partir de la position de la réf booking
-  dans le texte complet (jamais autour de la position du porteur, qui
-  capturerait le `(N)` de la mission précédente).
-
-**Validation empirique** : testé sur 4 plannings réels distincts
-(19/06, 20/06 x2, 21/06), **toujours 100 % des missions exactes** sur
-booking/vol/terminal/type/porteur/greeter, y compris les plannings où le
-premier cluster est massivement éclaté en colonnes.
-
-### 3.2 Chemin copier-coller (dans `index.html`) — repli, sûr mais parfois en saisie manuelle
-
-Utilisé quand l'utilisateur colle le texte du planning au lieu de charger
-le PDF (en pratique le mode le plus utilisé au quotidien). Le texte est
-**déjà aplati** au moment où l'app le reçoit — c'est un repli pur texte,
-sans accès aux coordonnées.
-
-**Principe de sûreté central** : une mission n'est affichée avec des
-valeurs *certaines* ("clean", zéro chip) que si elle est **localement non
-ambiguë**. Sinon, l'app affiche des puces ("chips") pour sélection
-manuelle — jamais de valeur devinée.
-
-**Définition de « clean » (évolution importante, voir §5)** : la propreté
-est jugée **localement, mission par mission** — entre la réf booking d'une
-mission et la réf booking suivante (le « scope »), il doit y avoir :
-
-- exactement **une seule réf booking** dans le scope ;
-- exactement **un seul vol distinct** dans le scope (les doublons
-  identiques d'un même vol comptent pour un, car une mission garde
-  toujours sa propre ligne de vol — un doublon ne peut être que la ligne
-  d'un voisin de même vol qui a été aspirée par le collage) ;
-- **aucun autre nom de porteur** entre la réf booking candidate et le nom
-  du porteur recherché (garde anti-vol-d'attribution, voir §5).
-
-Si une de ces conditions échoue → la mission part en chips
-(`bookingOptions`/`flightOptions` peuplés pour sélection manuelle dans
-l'UI).
-
-**Pourquoi pas un jugement de propreté au niveau du cluster entier** :
-l'implémentation initiale désactivait le fast-path pour *tout* le cluster
-dès qu'un seul sous-bloc était scrambled. Ça produisait des chips sur des
-missions pourtant parfaitement claires individuellement (cas réel :
-10743-138 transformé en chips alors que son booking+vol étaient sans
-ambiguïté, uniquement parce qu'une mission voisine du même cluster avait
-un vol dupliqué). Le jugement local par mission corrige ça sans rouvrir de
-faux positifs (voir tests §6).
-
-**Architecture interne** : trois branches de matching coexistent dans
-`extractMissionsCopyPaste` (clean fast-path / alignement par rang
-"coreAligned" / repli large par fenêtre de scope), routées selon le degré
-de désordre détecté dans le texte. Ne pas chercher à les fusionner sans
-retester les 4 plannings de référence (§6) — c'est une zone fragile qui a
-déjà régressé plusieurs fois pendant le développement.
-
-### 3.3 Routage entre les deux moteurs
-
-`extractMissions(text, porterName)` (dans `index.html`) :
-
-1. Si le texte ressemble à une sérialisation pdf.js déjà collée
-   (`isPdfjsSerialization`), tente `extractMissionsPdfjs` (variante
-   inline, différente de `parser.js` — historique, voir §7).
-2. Sinon (cas normal du copier-coller), utilise
-   `extractMissionsCopyPaste`.
-3. Le bouton « Charger un PDF » n'utilise **pas** cette fonction : il
-   appelle directement `MissionParser.fromPages()` de `parser.js`. S'il
-   ne trouve aucune mission (PDF non standard, scan image...), repli sur
-   `extractMissions(fullText, porter)` avec le texte aplati extrait du
-   PDF.
-
----
+> **Note de numérotation.** L'ancienne §3 « Architecture — les deux moteurs
+> d'extraction » et l'ancienne §6 « Méthode de validation » ont été déplacées
+> vers `src/core/CLAUDE.md` (chargé automatiquement pour tout travail sous
+> `src/core/`/`src/config/`) ; l'ancienne §8 « Upscaling vers un autre site »
+> est devenue le skill `upscale-new-site`. La numérotation ci-dessous garde
+> ses trous (4, 5, 7, 9) plutôt que d'être renumérotée, pour ne pas invalider
+> les nombreux renvois internes (« voir §5 point 25 », etc.) dans le reste du
+> document et dans `src/core/CLAUDE.md`.
 
 ## 4. Modèle de données et règles métier
 
@@ -302,7 +103,7 @@ déjà régressé plusieurs fois pendant le développement.
 ```
 
 **Champs ajoutés récemment** : `greeteurPhone`, `contactPhone` (téléphones
-cliquables, §3.1). Le type accepte désormais **`TRS`** (transit terminal à
+cliquables, voir `src/core/CLAUDE.md`). Le type accepte désormais **`TRS`** (transit terminal à
 terminal) en plus de ARR/DEP/Service.
 
 **Tous les champs de `createMission()` sont des constantes fixes** (plus
@@ -444,12 +245,12 @@ un bug déjà corrigé) :
 3. **Bug mission agence mal attribuée** : le nom du porteur, très au-dessus
    de sa réf booking, tombait dans la bande Y de la mission précédente.
    Fix : alignement par rang Y des noms de porteur plutôt que bandage
-   horizontal pur (voir §3.1 point 5).
+   horizontal pur (voir `src/core/CLAUDE.md`, chemin PDF, point 5).
 4. **Faux positif « cluster scrambled » sur le copier-coller** : une
    mission individuellement claire était mise en chips uniquement parce
    qu'un voisin de son cluster était ambigu. Fix : jugement de propreté
    local par mission (booking → booking suivant), pas par cluster (voir
-   §3.2). Question légitime posée et vérifiée à l'époque : « deux
+   `src/core/CLAUDE.md`, chemin copier-coller). Question légitime posée et vérifiée à l'époque : « deux
    personnes peuvent avoir une mission chacune sur le même vol » — validé
    non cassant car le découpage est par réf booking, jamais par vol ; deux
    porteurs sur un même vol ont deux réf booking distinctes, donc deux
@@ -501,7 +302,7 @@ un bug déjà corrigé) :
     durci (commence par `+`/`0`, ≥ 9 chiffres) pour rejeter les faux
     positifs d'horodatage. `contactPhoneFrom` retiré de `parser.js` au
     profit de `enrichMissionsWithPhones` (débordement de bande Y, voir
-    §3.1).
+    `src/core/CLAUDE.md`, chemin PDF).
 13. **Codes vol avec espace** (`BA 328`) : `flightFromItinerary` accepte
     `[A-Za-z]{1,3}\s*\d{1,5}` et recompacte (`BA 328` → `BA328`).
 14. **Faux terminal depuis horodatage** (`Terminal 19:00:00` → terminal
@@ -554,7 +355,8 @@ un bug déjà corrigé) :
     (singulier — corrigé une fois après une coquille « Aucun problèmes »)
     quand le champ est vide. Aucune de ces retouches ne touche
     `parser-pdf.js`/`parser-text.js` : `npm test` reste vert sans besoin de
-    revalider les 4 plannings de référence (voir §6), la suite de tests
+    revalider les 4 plannings de référence (voir `src/core/CLAUDE.md`,
+    Méthode de validation), la suite de tests
     suffit. Au passage, un bug d'environnement a été corrigé dans
     `tests/parser.test.js` : sous la version de Node de cet environnement,
     `import('pdfjs-dist/legacy/build/pdf.js')` n'expose plus `getDocument`
@@ -594,7 +396,7 @@ un bug déjà corrigé) :
     téléphone du porteur voisin (cas réel : `Greeter: Antoine` sans numéro
     récupérait le `06 10 88 78 90` de `Bryan L`, la mission suivante — même
     famille de bug que le débordement historique de `contactPhone`, voir
-    §3.1/§7). Fix : la fenêtre de `enrichWithPhones` est désormais bornée à
+    `src/core/CLAUDE.md`/§7). Fix : la fenêtre de `enrichWithPhones` est désormais bornée à
     200 caractères ET à la prochaine réf booking (`\d{4,6}-\d+`), le slice
     étant fait *avant* la recherche de réf pour ne jamais scanner au-delà sur
     un gros planning (8 pages / 40+ missions) — même principe que
@@ -658,62 +460,6 @@ un bug déjà corrigé) :
 
 ---
 
-## 6. Méthode de validation (à reproduire pour toute modification)
-
-**Depuis la v2, une suite de tests est committée** : `tests/parser.test.js`,
-lancée par `npm test`. Elle combine des tests unitaires sur le core pur
-(téléphone, validation, NO SHOW, rapport, lieux) et des tests d'intégration
-sur les PDF de référence dans `tests/fixtures/`. À lancer après CHAQUE
-changement touchant `src/core/parser-*.js`, `src/config/` ou `enrich.js`.
-
-Pour une validation plus poussée (nouveau cas litigieux), garder le réflexe
-historique : comparer la sortie du parseur à une vérité terrain extraite
-indépendamment du PDF (`fitz`/PyMuPDF en Python, texte propre par bloc de
-mission, jamais le même chemin de code que le parseur testé).
-
-**Plannings de référence utilisés jusqu'ici** (à demander à l'utilisateur
-s'ils ne sont plus disponibles, ne pas réinventer une vérité terrain sans
-PDF source) :
-
-- `Mission-2026-06-19_10_16.pdf` — 42 missions
-- `Mission-2026-06-20_06_25.pdf` — 40 missions, contient le cas
-  d'attribution croisée (10656-3 / Bounmy S vs Damien P.)
-- `Mission-2026-06-19_20_06.pdf` — 38 missions
-- `Mission-2026-06-20_19_49.pdf` (21/06) — planning le plus éclaté
-  testé, valide le fix d'alignement par rang sur un grand nombre de
-  porteurs
-- `Mission-2026-06-22_22_11.pdf` (23/06) — 6 pages, contient `BA 328`
-  (vol à espace), Monaco Prestige Limousines, SP Hinduja Bank (clients
-  agence), valide l'extraction client/pax/contact agence. **Fixture de test.**
-- `Mission-2026-06-23_22_02.pdf` (24/06) — 8 pages, contient
-  `GM FINANCIAL CHILE` / `WD CONSEILS` (groupes ALL-CAPS), U21733
-  (`Terminal 19:00:00` piège terminal), greeter Antoine au numéro
-  fragmenté sur 2 lignes, faux positif contact Nathan D.
-- `planning-30.pdf` (30/06) — contient `MY FRENCH RIVIERA` et `G-OPS`
-  (téléphone client dans la colonne client). **Fixture de test.**
-- `planning-23-double-hash.pdf` (23/07) — contient `M##31309` (double dièse,
-  glitch TCPDF ponctuel), valide le fix du regex `mnum` (booking ACA erroné,
-  voir §5 point 25). **Fixture de test.**
-- `planning-24-greeter-no-colon.pdf` (24/07) — contient plusieurs greeters
-  labellisés sans `:` (« Greeter NOM ») et un greeter sans téléphone propre
-  (Antoine), valide le fix de débordement de `enrichWithPhones` (voir §5
-  point 26). **Fixture de test.**
-
-**Protocole minimal avant de livrer un changement touchant
-extraction/attribution** :
-
-1. `npm test` doit passer au vert.
-2. Si le changement touche la logique, construire la vérité terrain depuis
-   le texte PyMuPDF propre (pas depuis le parseur) et comparer la sortie de
-   `parser-pdf.js` sur **tous les porteurs**, pas seulement Damien P.
-3. Comparer le moteur copier-coller sur le texte tel que l'utilisateur l'a
-   réellement collé (le désordre exact du collage révèle les bugs).
-4. Lors du refactoring v2, la non-régression a été prouvée en comparant
-   octet par octet la sortie du nouveau `parser-pdf.js` à l'ancien
-   `parser.js` : **51 comparaisons (porteur×fichier), 0 différence**.
-
----
-
 ## 7. Dette technique connue (acceptée, non traitée par choix)
 
 Issue d'un audit explicite ; statut = décision assumée par l'utilisateur,
@@ -748,30 +494,9 @@ pas un oubli :
 
 ## 8. Upscaling vers un autre site (multi-aéroport / multi-agence)
 
-**Objectif de l'architecture v2** : pouvoir brancher un autre site ayant le
-**même format de tableau PDF** en éditant un seul fichier de config, sans
-toucher au code métier.
-
-**Procédure** :
-1. Copier `src/config/nce-wellcom.js` → `src/config/<site>.js`.
-2. Ajuster les valeurs : `site` (code aéroport, libellés), `pdfTable`
-   (en-têtes de colonnes, centres de repli, index des colonnes), `clients`
-   (motifs directs + libellés, motif de réf agence, motif groupes MAJUSCULES),
-   `noteLabels` (greeter, chauffeur), `itinerary` (motif vol/terminal),
-   `places` (règles ARR/DEP/TRS), `phone`.
-3. Dans `src/ui/app.js`, changer l'import :
-   `import { siteConfig as CFG } from '../config/<site>.js';`
-4. (Si le moteur texte est nécessaire) adapter les constantes en dur de
-   `parser-text.js` — voir dette §7.
-5. `npm test` avec une fixture du nouveau site.
-
-**Ce qui rend cela possible** : `core/parser-pdf.js` ne contient AUCUNE
-valeur propre à un site (vérifié à l'audit v2 : 0 littéral NCE/ACA/Well'Com).
-Tout passe par le paramètre `cfg`.
-
-**Passage natif (futur)** : `core/` et `store/` étant purs (aucun DOM), une
-app Capacitor ou React Native réutilise ces modules tels quels et ne réécrit
-que `ui/app.js`. C'est la raison d'être de la frontière core/ui (voir §2).
+Procédure et détails déplacés vers le skill `upscale-new-site`
+(`.claude/skills/upscale-new-site/SKILL.md`) — invoqué automatiquement pour
+toute demande d'ajout d'un nouveau site/aéroport/agence.
 
 ---
 
@@ -798,7 +523,9 @@ logo blanc sur fond foncé). À ajuster si Damien fournit la charte exacte.
 
 ## Pour aller plus loin
 
-Avant toute modification du parsing, relire intégralement §3 et §5 — la
-majorité des régressions passées venaient d'une correction locale qui
-ignorait l'historique d'un fix précédent sur un cas voisin. Toujours
-revalider sur les 4 plannings de référence avant de livrer.
+Avant toute modification du parsing, relire intégralement `src/core/CLAUDE.md`
+(architecture des deux moteurs, chargé automatiquement pour tout travail sous
+`src/core/`) et §5 ci-dessus — la majorité des régressions passées venaient
+d'une correction locale qui ignorait l'historique d'un fix précédent sur un
+cas voisin. Toujours revalider sur les 4 plannings de référence avant de
+livrer.
