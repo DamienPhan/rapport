@@ -508,6 +508,48 @@ un bug déjà corrigé) :
     minute","Excellente","LIVE"]`) malgré l'affichage anglais ; rapport généré
     en interface anglaise vérifié caractère pour caractère toujours en
     français.
+30. **`/code-review` du commit i18n (point 29) — bug de perte de saisie sur
+    `toggleLang()` + deux bugs de traduction mineurs** : 8 agents lancés en
+    parallèle sur le commit `1da99fb`. Un bug confirmé par plusieurs angles
+    (correction/comportement supprimé) : `toggleLang()` appelait `render()`
+    sans `syncAll()` d'abord, contrairement à tous les autres sites d'appel
+    interactifs (`removeMission`, `toggleMission`, `markNoShow`,
+    `undoMissions`, `generateReport`...) — `render()` reconstruit tout le DOM
+    depuis le tableau `missions` en mémoire, donc une saisie tapée mais pas
+    encore blurée (ex. `probleme` en cours d'édition) était silencieusement
+    perdue si l'utilisateur basculait la langue avant de sortir du champ.
+    Fix : `syncAll()` ajouté en première ligne de `toggleLang()`. Deux bugs
+    de traduction mineurs trouvés en parallèle : (a) l'option statique
+    « Autre... » du `<select>` porteur dans `index.html` n'avait pas
+    d'attribut `data-i18n`, donc restait en français au tout premier
+    chargement en anglais tant qu'aucun planning n'était chargé (le
+    `refreshRosterUI()` qui la traduit ne se déclenche qu'après extraction) —
+    fix : `data-i18n="porter.other"` ajouté sur l'`<option>` statique ; (b)
+    `detectLang()` faisait `navigator.languages || [navigator.language]`,
+    qui ne se replie jamais sur `navigator.language` si `navigator.languages`
+    existe mais est un tableau **vide** (`[] || x` vaut `[]`, un tableau vide
+    est *truthy*) — cas réel sur certains navigateurs/webviews anti-
+    fingerprinting ; fix : test explicite de `.length` avant d'utiliser
+    `navigator.languages`. Un footgun latent (pas un bug actif) a aussi été
+    corrigé par précaution : deux variables locales `const t` dans
+    `harvestRoster()`/`pickBooking()` masquaient le helper de traduction
+    module-level `t(key, vars)` — sans effet aujourd'hui (ni l'une ni
+    l'autre fonction n'appelle `t()` en interne) mais un futur ajout de
+    traduction dans l'une de ces fonctions aurait échoué silencieusement en
+    récupérant la variable locale au lieu du helper ; renommées `line`/`time`.
+    Un test unitaire ajouté (`tests/parser.test.js`) vérifie la parité des
+    clés entre `translations.fr` et `translations.en` (récursif sur les
+    clés-feuilles) — plusieurs agents ont signalé indépendamment l'absence de
+    filet contre une dérive de clé entre les deux dictionnaires. Les
+    suggestions de simplification/déduplication (clés `validation.*`
+    dupliquant `field.*`, helper de rendu d'`<option>` pour factoriser le
+    motif `value="X" ${selected}>${opt(...)}`) ont été **délibérément
+    laissées de côté** : refactoring stylistique sans bug associé, hors
+    scope d'une correction de revue. Vérifié dans le navigateur (skill
+    `run-rapport`) : champ rempli sans blur → bascule de langue → valeur
+    toujours présente ; option « Autre... »/« Other... » traduite dès le
+    premier rendu dans les deux langues. `npm test` : 17/17 (16 + le
+    nouveau test de parité).
 
 ---
 

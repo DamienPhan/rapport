@@ -35,6 +35,7 @@ function applyStaticTranslations(){
 }
 
 function toggleLang(){
+  syncAll();
   currentLang = otherLang(currentLang);
   setLang(currentLang);
   applyStaticTranslations();
@@ -130,10 +131,10 @@ function harvestRoster(text){
   if(!text) return;
   const porters = new Set(), greeters = new Set();
   for(const raw of text.split('\n')){
-    const t = raw.trim();
-    const g = t.match(/greete?r[\s:]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
+    const line = raw.trim();
+    const g = line.match(/greete?r[\s:]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.\-]*)/i);
     if(g){ const n = g[1].trim(); if(['a','à','venir','voir'].indexOf(n.toLowerCase()) === -1) greeters.add(n); }
-    const c = t.replace(/^NCE\s+/, '').replace(/\s*\+?\d.*$/, '').trim();
+    const c = line.replace(/^NCE\s+/, '').replace(/\s*\+?\d.*$/, '').trim();
     if(PORTER_HARVEST_RE.test(c) && !PORTER_HARVEST_BLOCK.test(c)) porters.add(c);
   }
   const ch = rosterMerge('customPorters', porters) | rosterMerge('customGreeters', greeters);
@@ -186,8 +187,8 @@ function pickBooking(idx, el){
   if(pb) pb.value = el.getAttribute('data-live') === '1' ? 'LIVE' : 'PRÉ-BOOKING';
   const titleEl = document.querySelector(`.mission[data-idx="${idx}"] .mission-head strong`);
   if(titleEl){
-    const t = missions[idx] ? fmtTime(missions[idx].sortTime) : '';
-    titleEl.innerHTML = el.getAttribute('data-num') + (t ? ' <span class="mtime">· ' + t + '</span>' : '');
+    const time = missions[idx] ? fmtTime(missions[idx].sortTime) : '';
+    titleEl.innerHTML = el.getAttribute('data-num') + (time ? ' <span class="mtime">· ' + time + '</span>' : '');
   }
   const parent = el.parentNode;
   parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
