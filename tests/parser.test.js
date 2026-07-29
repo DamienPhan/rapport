@@ -19,6 +19,7 @@ import { createMission, applyPlaceDefaults, validateMission, markNoShow } from '
 import { generateReportText } from '../src/core/report.js';
 import { normalizePhone, extractClientPhone } from '../src/core/phone.js';
 import { enrichWithPhones } from '../src/core/enrich.js';
+import { translations } from '../src/i18n/translations.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -138,6 +139,19 @@ test('enrichWithPhones ne déborde pas sur le téléphone de la mission suivante
   const fullText = 'Falco P. +33 6 67 45 94 86 Greeter: Antoine Arrivée\n11483-466 M#29733 ...NCE Bryan L 06 10 88 78 90 Greeter\n';
   enrichWithPhones(missions, fullText, siteConfig);
   assert.strictEqual(missions[0].greeteurPhone, '');
+});
+
+function leafKeyPaths(obj, prefix = '') {
+  return Object.entries(obj).flatMap(([k, v]) => {
+    const path = prefix ? `${prefix}.${k}` : k;
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? leafKeyPaths(v, path) : [path];
+  });
+}
+
+test('translations.js : fr et en exposent exactement les mêmes clés', () => {
+  const frKeys = leafKeyPaths(translations.fr).sort();
+  const enKeys = leafKeyPaths(translations.en).sort();
+  assert.deepStrictEqual(enKeys, frKeys);
 });
 
 console.log('\n── Tests d\'intégration (PDF de référence) ───────────');

@@ -19,7 +19,8 @@ const DEFAULT_LANG = 'fr';
  * interne à une équipe francophone, l'anglais est la seule alternative utile.
  */
 export function detectLang() {
-  const langs = (typeof navigator !== 'undefined' && (navigator.languages || [navigator.language])) || [];
+  const hasLanguages = typeof navigator !== 'undefined' && navigator.languages && navigator.languages.length;
+  const langs = hasLanguages ? navigator.languages : (typeof navigator !== 'undefined' && navigator.language ? [navigator.language] : []);
   for (const l of langs) {
     if (typeof l === 'string' && l.toLowerCase().startsWith('en')) return 'en';
   }
