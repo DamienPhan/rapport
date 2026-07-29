@@ -550,6 +550,30 @@ un bug déjà corrigé) :
     toujours présente ; option « Autre... »/« Other... » traduite dès le
     premier rendu dans les deux langues. `npm test` : 17/17 (16 + le
     nouveau test de parité).
+31. **Correction du point 30 — `data-i18n="porter.other"` était du code mort,
+    aucun bug réel derrière** : un second `/code-review` (lancé sur le commit
+    du point 30 lui-même) a montré que le diagnostic initial était faux.
+    `refreshRosterUI()` (`src/ui/app.js`, appelée en toute fin d'init juste
+    après `applyStaticTranslations()`, ligne pour ligne — voir `git blame`,
+    cet appel existe depuis le **30/06**, bien avant l'i18n) réécrit
+    inconditionnellement et de façon synchrone tout le `innerHTML` du
+    `<select>` porteur à chaque chargement de page, avec sa propre traduction
+    `t('porter.other')` directement en JS — donc l'`<option>` statique
+    d'`index.html` (avec ou sans `data-i18n`) est toujours remplacée avant
+    que le navigateur n'ait pu peindre quoi que ce soit d'observable. Le
+    « bug » décrit au point 30 ((a), première mission chargée) n'existait
+    donc pas : l'attribut ajouté ne pouvait avoir strictement aucun effet.
+    Fix : attribut `data-i18n` retiré (code mort trompeur pour un futur
+    lecteur). Au passage, nettoyage cosmétique signalé par le même agent :
+    `detectLang()` dans `src/i18n/lang.js` testait deux fois
+    `typeof navigator !== 'undefined'` dans le même ternaire — hissé une
+    seule fois dans une variable `nav`, comportement inchangé. **Leçon** :
+    même un diagnostic de bug issu d'un `/code-review` doit être vérifié par
+    une lecture réelle du code (ici l'ordre d'exécution à l'init), pas
+    seulement par un test manuel en navigateur qui, par coïncidence, donnait
+    déjà le bon résultat avant le fix (`refreshRosterUI()` traduisait déjà
+    correctement, indépendamment de l'attribut ajouté). `npm test` : 17/17,
+    inchangé.
 
 ---
 
