@@ -193,7 +193,12 @@ manuellement sur la carte.
   points — `Booking : #30258` (et non `Booking # : 30258`). La section « Un
   problème rencontré ? » affiche **« Aucun problème »** quand `m.probleme`
   est vide (au lieu d'une ligne blanche) ; reste inchangé si `probleme` vaut
-  autre chose (ex. `'NO SHOW'`).
+  autre chose (ex. `'NO SHOW'`). Le total de bagages (`Total Bagages pris en
+  charge : N`) est dupliqué **tout en haut du rapport**, avant « 1.
+  Informations générales », en plus de son emplacement d'origine en section
+  2 — pour le voir sans avoir à faire défiler tout le rapport. Les deux
+  lignes restent toujours identiques (même calcul `total`), aucune des deux
+  n'a été retirée.
 - **Copie du numéro de vol** : un bouton 📋 à côté du champ « Vol - code
   IATA » (`copyFlight` dans `src/ui/app.js`) copie sa valeur dans le
   presse-papiers. Réutilise la même logique clipboard fiabilisée iOS que
