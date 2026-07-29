@@ -15,9 +15,32 @@ import { extractMissions } from '../core/parser-text.js';
 import { enrichWithPhones } from '../core/enrich.js';
 import { generateReportText, resolvePlace } from '../core/report.js';
 import { createSessionStore } from '../store/session.js';
+import { t as translate, optionLabel, getLang, setLang, otherLang } from '../i18n/lang.js';
 
 let missions = [];
 let lastPdfPages = null;
+// Langue de l'INTERFACE uniquement — n'affecte jamais les valeurs métier
+// stockées dans une mission ni le rapport final généré, toujours en français.
+let currentLang = getLang();
+function t(key, vars){ return translate(currentLang, key, vars); }
+function opt(group, value){ return optionLabel(currentLang, group, value); }
+
+function applyStaticTranslations(){
+  document.documentElement.lang = currentLang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-placeholder')); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
+  const toggle = document.getElementById('langToggle');
+  if(toggle) toggle.textContent = t('header.langToggle');
+}
+
+function toggleLang(){
+  currentLang = otherLang(currentLang);
+  setLang(currentLang);
+  applyStaticTranslations();
+  refreshRosterUI();
+  render();
+}
 
 function togglePorterCustom(){
   const sel = document.getElementById('porterSelect');
@@ -82,8 +105,8 @@ function reloadForPorter(){
   } else {
     missions = [];
     document.getElementById('missionsContainer').innerHTML =
-      '<div class="empty">Aucune mission trouvée pour « ' + porter + ' ».</div>' +
-      '<button class="btn full-ghost" onclick="addManualMission()">+ Ajouter une mission manuelle</button>';
+      `<div class="empty">${escHtml(t('missions.emptyForPorter', { porter }))}</div>` +
+      `<button class="btn full-ghost" onclick="addManualMission()">${t('missions.addManual')}</button>`;
   }
   saveState();
 }
@@ -125,7 +148,7 @@ function refreshRosterUI(){
   const prev = sel.value;
   const customs = rosterLoad('customPorters').filter(n=>!window._basePorters.includes(n)).sort((a,b)=>a.localeCompare(b,'fr'));
   const merged = window._basePorters.concat(customs);
-  sel.innerHTML = merged.map(n=>`<option>${escHtml(n)}</option>`).join('') + '<option value="custom">Autre...</option>';
+  sel.innerHTML = merged.map(n=>`<option>${escHtml(n)}</option>`).join('') + `<option value="custom">${escHtml(t('porter.other'))}</option>`;
   if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
 
   const gc = rosterLoad('customGreeters').filter(n=>!window._baseGreeters.includes(n));
@@ -140,15 +163,15 @@ function renderCandidates(m, idx){
   const bOpts = m.bookingOptions || [];
   const fOpts = m.flightOptions || [];
   if(bOpts.length <= 1 && fOpts.length <= 1) return '';
-  let html = '<div class="candidates"><div class="clabel">⚠ Plusieurs missions à la même heure ici — touche celle qui te concerne</div>';
+  let html = `<div class="candidates"><div class="clabel">${t('candidates.warning')}</div>`;
   if(bOpts.length > 1){
-    html += '<div class="csub">1. Ton numéro de booking (avec l\'heure) :</div>';
+    html += `<div class="csub">${t('candidates.bookingSub')}</div>`;
     html += '<div class="chips">';
-    html += bOpts.map(b => `<span class="chip ${b.num===m.booking?'active':''}" data-num="${b.num}" data-live="${b.live?'1':'0'}" onclick="pickBooking(${idx}, this)">${b.time ? b.time + ' · ' : ''}${b.num}${b.live?' (LIVE)':''}</span>`).join('');
+    html += bOpts.map(b => `<span class="chip ${b.num===m.booking?'active':''}" data-num="${b.num}" data-live="${b.live?'1':'0'}" onclick="pickBooking(${idx}, this)">${b.time ? b.time + ' · ' : ''}${b.num}${b.live?t('candidates.live'):''}</span>`).join('');
     html += '</div>';
   }
   if(fOpts.length > 1){
-    html += '<div class="csub">2. Ton vol :</div>';
+    html += `<div class="csub">${t('candidates.flightSub')}</div>`;
     html += '<div class="chips">';
     html += fOpts.map(f => `<span class="chip ${f.vol===m.vol?'active':''}" data-vol="${f.vol}" data-term="${f.terminal}" onclick="pickFlight(${idx}, this)">${f.label}</span>`).join('');
     html += '</div>';
@@ -198,13 +221,13 @@ function renderMission(m, idx){
   <div class="mission${isOpen?' open':''}" data-idx="${idx}">
     <div class="mission-head" onclick="toggleMission(${idx})">
       <div class="mhead-main">
-        <strong>${m.booking || 'Nouvelle mission'}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
+        <strong>${m.booking || t('missions.newMission')}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
         ${summary ? `<div class="mhead-summary">${escHtml(summary)}</div>` : ''}
       </div>
       <div class="right">
-        <button class="btn-noshow" onclick="event.stopPropagation();markNoShow(${idx})" title="Marquer comme NO SHOW">NO SHOW</button>
+        <button class="btn-noshow" onclick="event.stopPropagation();markNoShow(${idx})" title="${t('mission.markNoShowTitle')}">${t('mission.noShow')}</button>
         <span class="badge badge-${m.type||'Service'}">${typeIcon(m.type)}${m.type || '—'}</span>
-        <button class="del" onclick="event.stopPropagation();removeMission(${idx})" title="Supprimer">✕</button>
+        <button class="del" onclick="event.stopPropagation();removeMission(${idx})" title="${t('mission.deleteTitle')}">✕</button>
         <span class="chevron">▾</span>
       </div>
     </div>
@@ -212,133 +235,133 @@ function renderMission(m, idx){
       ${renderCandidates(m, idx)}
 
       <div class="section">
-        <div class="section-title">Identité</div>
+        <div class="section-title">${t('section.identity')}</div>
         <div class="grid">
-          <div class="field"><label>Booking #</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
-          <div class="field"><label>Date</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
-          <div class="field full"><label>Client</label><input id="${fieldId(idx,'client')}" value="${m.client}" oninput="this.value=this.value.toUpperCase()">
+          <div class="field"><label>${t('field.booking')}</label><input id="${fieldId(idx,'booking')}" value="${m.booking}"></div>
+          <div class="field"><label>${t('field.date')}</label><input id="${fieldId(idx,'date')}" value="${m.date}"></div>
+          <div class="field full"><label>${t('field.client')}</label><input id="${fieldId(idx,'client')}" value="${m.client}" oninput="this.value=this.value.toUpperCase()">
           ${m.clientPhone ? `<div class="tel-row"><a href="tel:${m.clientPhone}" class="tel-chip">📞 ${m.clientPhone}</a></div>` : ''}
           </div>
-          <div class="field full"><label>Greeteur (optionnel)</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="ex: Linda.K" oninput="this.value=this.value.toUpperCase()">
+          <div class="field full"><label>${t('field.greeter')}</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="${t('field.greeterPlaceholder')}" oninput="this.value=this.value.toUpperCase()">
           ${m.greeteurPhone ? `<div class="tel-row"><a href="tel:${m.greeteurPhone}" class="tel-chip">📞 ${m.greeteurPhone}</a></div>` : ''}
           </div>
-          ${m.contactPhone ? `<div class="field full"><label>Contact chauffeur</label><div class="tel-row"><a href="tel:${m.contactPhone}" class="tel-chip">📞 ${m.contactPhone}</a></div></div>` : ''}
+          ${m.contactPhone ? `<div class="field full"><label>${t('field.contactDriver')}</label><div class="tel-row"><a href="tel:${m.contactPhone}" class="tel-chip">📞 ${m.contactPhone}</a></div></div>` : ''}
           <div class="field">
-            <label>Pré-booking / Live</label>
+            <label>${t('field.prebooking')}</label>
             <select id="${fieldId(idx,'prebooking')}">
-              <option ${m.prebooking==='PRÉ-BOOKING'?'selected':''}>PRÉ-BOOKING</option>
-              <option ${m.prebooking==='LIVE'?'selected':''}>LIVE</option>
+              <option value="PRÉ-BOOKING" ${m.prebooking==='PRÉ-BOOKING'?'selected':''}>${opt('prebooking','PRÉ-BOOKING')}</option>
+              <option value="LIVE" ${m.prebooking==='LIVE'?'selected':''}>${opt('prebooking','LIVE')}</option>
             </select>
           </div>
         </div>
       </div>
 
       <div class="section">
-        <div class="section-title">Vol</div>
+        <div class="section-title">${t('section.flight')}</div>
         <div class="grid">
           <div class="field">
-            <label>Type de service</label>
+            <label>${t('field.serviceType')}</label>
             <select id="${fieldId(idx,'type')}" onchange="updateTypeBadge(${idx})">
               <option value="DEP" ${m.type==='DEP'?'selected':''}>🛫 DEP</option>
               <option value="ARR" ${m.type==='ARR'?'selected':''}>🛬 ARR</option>
               <option value="TRS" ${m.type==='TRS'?'selected':''}>🔁 TRS</option>
             </select>
           </div>
-          <div class="field"><label>Nombre de passagers</label><input id="${fieldId(idx,'pax')}" value="${m.pax}" inputmode="numeric"></div>
-          <div class="field"><label>Vol - code IATA</label>
+          <div class="field"><label>${t('field.pax')}</label><input id="${fieldId(idx,'pax')}" value="${m.pax}" inputmode="numeric"></div>
+          <div class="field"><label>${t('field.flight')}</label>
             <div class="input-copy-row">
               <input id="${fieldId(idx,'vol')}" value="${m.vol}" oninput="this.value=this.value.toUpperCase()">
-              <button type="button" class="copy-icon-btn" id="${fieldId(idx,'volCopyBtn')}" onclick="copyFlight(${idx})" title="Copier le numéro de vol">📋</button>
+              <button type="button" class="copy-icon-btn" id="${fieldId(idx,'volCopyBtn')}" onclick="copyFlight(${idx})" title="${t('field.copyFlightTitle')}">📋</button>
             </div>
           </div>
-          <div class="field"><label>Terminal</label><input id="${fieldId(idx,'terminal')}" value="${m.terminal}" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+          <div class="field"><label>${t('field.terminal')}</label><input id="${fieldId(idx,'terminal')}" value="${m.terminal}" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')"></div>
         </div>
       </div>
 
       <div class="section">
-        <div class="section-title">Bagages</div>
+        <div class="section-title">${t('section.bags')}</div>
         <div class="grid">
-          <div class="field"><label>Standard</label><input id="${fieldId(idx,'bagStandard')}" value="${m.bagStandard}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
-          <div class="field"><label>Hors format</label><input id="${fieldId(idx,'bagHorsFormat')}" value="${m.bagHorsFormat}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
-          <div class="field full"><label>Cage animal</label><input id="${fieldId(idx,'bagCage')}" value="${m.bagCage}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+          <div class="field"><label>${t('field.bagStandard')}</label><input id="${fieldId(idx,'bagStandard')}" value="${m.bagStandard}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+          <div class="field"><label>${t('field.bagOversize')}</label><input id="${fieldId(idx,'bagHorsFormat')}" value="${m.bagHorsFormat}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+          <div class="field full"><label>${t('field.bagCage')}</label><input id="${fieldId(idx,'bagCage')}" value="${m.bagCage}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
         </div>
         <div class="total-row">
-          <span>Total bagages pris en charge</span>
+          <span>${t('field.bagTotal')}</span>
           <strong id="${fieldId(idx,'total')}">${total}</strong>
         </div>
       </div>
 
       <div class="section">
-        <div class="section-title">Lieux &amp; suivi</div>
+        <div class="section-title">${t('section.places')}</div>
         <div class="grid">
           <div class="field">
-            <label>Détaxe</label>
+            <label>${t('field.detax')}</label>
             <select id="${fieldId(idx,'detaxe')}">
-              <option ${m.detaxe==='Non'?'selected':''}>Non</option>
-              <option ${m.detaxe==='Oui'?'selected':''}>Oui</option>
-              <option ${m.detaxe==='N/A'?'selected':''}>N/A</option>
+              <option value="Non" ${m.detaxe==='Non'?'selected':''}>${opt('detaxe','Non')}</option>
+              <option value="Oui" ${m.detaxe==='Oui'?'selected':''}>${opt('detaxe','Oui')}</option>
+              <option value="N/A" ${m.detaxe==='N/A'?'selected':''}>${opt('detaxe','N/A')}</option>
             </select>
           </div>
           <div class="field">
-            <label>Nombre de porteurs</label>
+            <label>${t('field.porters')}</label>
             <input id="${fieldId(idx,'porteurs')}" value="${m.porteurs}">
           </div>
 
           <div class="field">
-            <label>Lieu de rencontre</label>
+            <label>${t('field.meetPlace')}</label>
             <select id="${fieldId(idx,'lieuRencontre')}" onchange="toggleAutre(${idx},'lieuRencontre')">
-              <option ${m.lieuRencontre==='Dépose minute'?'selected':''}>Dépose minute</option>
-              <option ${m.lieuRencontre==='Tapis bagage'?'selected':''}>Tapis bagage</option>
-              <option ${m.lieuRencontre==='Parking pro'?'selected':''}>Parking pro</option>
-              <option ${m.lieuRencontre==='Linéaire Professionnel'?'selected':''}>Linéaire Professionnel</option>
-              <option ${m.lieuRencontre==='Gare routière (BUS)'?'selected':''}>Gare routière (BUS)</option>
-              <option ${m.lieuRencontre==='Loueurs'?'selected':''}>Loueurs</option>
-              <option ${m.lieuRencontre==='Vol privé'?'selected':''}>Vol privé</option>
-              <option value="Autre" ${m.lieuRencontre==='Autre'?'selected':''}>Autre...</option>
-              <option ${m.lieuRencontre==='N/A'?'selected':''}>N/A</option>
+              <option value="Dépose minute" ${m.lieuRencontre==='Dépose minute'?'selected':''}>${opt('places','Dépose minute')}</option>
+              <option value="Tapis bagage" ${m.lieuRencontre==='Tapis bagage'?'selected':''}>${opt('places','Tapis bagage')}</option>
+              <option value="Parking pro" ${m.lieuRencontre==='Parking pro'?'selected':''}>${opt('places','Parking pro')}</option>
+              <option value="Linéaire Professionnel" ${m.lieuRencontre==='Linéaire Professionnel'?'selected':''}>${opt('places','Linéaire Professionnel')}</option>
+              <option value="Gare routière (BUS)" ${m.lieuRencontre==='Gare routière (BUS)'?'selected':''}>${opt('places','Gare routière (BUS)')}</option>
+              <option value="Loueurs" ${m.lieuRencontre==='Loueurs'?'selected':''}>${opt('places','Loueurs')}</option>
+              <option value="Vol privé" ${m.lieuRencontre==='Vol privé'?'selected':''}>${opt('places','Vol privé')}</option>
+              <option value="Autre" ${m.lieuRencontre==='Autre'?'selected':''}>${opt('places','Autre')}</option>
+              <option value="N/A" ${m.lieuRencontre==='N/A'?'selected':''}>${opt('places','N/A')}</option>
             </select>
-            <input class="autre-input" id="${fieldId(idx,'lieuRencontreAutre')}" placeholder="Précise le lieu" value="${m.lieuRencontreAutre||''}" style="display:${m.lieuRencontre==='Autre'?'block':'none'}">
+            <input class="autre-input" id="${fieldId(idx,'lieuRencontreAutre')}" placeholder="${t('field.placeOtherPlaceholder')}" value="${m.lieuRencontreAutre||''}" style="display:${m.lieuRencontre==='Autre'?'block':'none'}">
           </div>
 
           <div class="field">
-            <label>Lieu de dépose</label>
+            <label>${t('field.dropPlace')}</label>
             <select id="${fieldId(idx,'lieuDepose')}" onchange="toggleAutre(${idx},'lieuDepose')">
-              <option value="AUTO_CHECKIN" ${m.lieuDepose==='AUTO_CHECKIN'?'selected':''}>Check-in + vol (${m.vol || '...'})</option>
-              <option ${m.lieuDepose==='Dépose minute'?'selected':''}>Dépose minute</option>
-              <option ${m.lieuDepose==='Tapis bagage'?'selected':''}>Tapis bagage</option>
-              <option ${m.lieuDepose==='Parking pro'?'selected':''}>Parking pro</option>
-              <option ${m.lieuDepose==='Gare routière (BUS)'?'selected':''}>Gare routière (BUS)</option>
-              <option ${m.lieuDepose==='Loueurs'?'selected':''}>Loueurs</option>
-              <option ${m.lieuDepose==='Vol privé'?'selected':''}>Vol privé</option>
-              <option value="Autre" ${m.lieuDepose==='Autre'?'selected':''}>Autre...</option>
-              <option ${m.lieuDepose==='N/A'?'selected':''}>N/A</option>
+              <option value="AUTO_CHECKIN" ${m.lieuDepose==='AUTO_CHECKIN'?'selected':''}>${t('field.autoCheckin', { vol: m.vol })}</option>
+              <option value="Dépose minute" ${m.lieuDepose==='Dépose minute'?'selected':''}>${opt('places','Dépose minute')}</option>
+              <option value="Tapis bagage" ${m.lieuDepose==='Tapis bagage'?'selected':''}>${opt('places','Tapis bagage')}</option>
+              <option value="Parking pro" ${m.lieuDepose==='Parking pro'?'selected':''}>${opt('places','Parking pro')}</option>
+              <option value="Gare routière (BUS)" ${m.lieuDepose==='Gare routière (BUS)'?'selected':''}>${opt('places','Gare routière (BUS)')}</option>
+              <option value="Loueurs" ${m.lieuDepose==='Loueurs'?'selected':''}>${opt('places','Loueurs')}</option>
+              <option value="Vol privé" ${m.lieuDepose==='Vol privé'?'selected':''}>${opt('places','Vol privé')}</option>
+              <option value="Autre" ${m.lieuDepose==='Autre'?'selected':''}>${opt('places','Autre')}</option>
+              <option value="N/A" ${m.lieuDepose==='N/A'?'selected':''}>${opt('places','N/A')}</option>
             </select>
-            <input class="autre-input" id="${fieldId(idx,'lieuDeposeAutre')}" placeholder="Précise le lieu" value="${m.lieuDeposeAutre||''}" style="display:${m.lieuDepose==='Autre'?'block':'none'}">
+            <input class="autre-input" id="${fieldId(idx,'lieuDeposeAutre')}" placeholder="${t('field.placeOtherPlaceholder')}" value="${m.lieuDeposeAutre||''}" style="display:${m.lieuDepose==='Autre'?'block':'none'}">
           </div>
 
-          <div class="field full"><label>Problème rencontré ?</label><textarea class="small" id="${fieldId(idx,'probleme')}">${m.probleme}</textarea></div>
+          <div class="field full"><label>${t('field.problem')}</label><textarea class="small" id="${fieldId(idx,'probleme')}">${m.probleme}</textarea></div>
 
           <div class="field full">
-            <label>Satisfaction client</label>
+            <label>${t('field.satisfaction')}</label>
             <select id="${fieldId(idx,'satisfaction')}">
-              <option ${m.satisfaction==='Excellente'?'selected':''}>Excellente</option>
-              <option ${m.satisfaction==='Très bien'?'selected':''}>Très bien</option>
-              <option ${m.satisfaction==='Bonne'?'selected':''}>Bonne</option>
-              <option ${m.satisfaction==='Moyenne'?'selected':''}>Moyenne</option>
-              <option ${m.satisfaction==='Mauvaise'?'selected':''}>Mauvaise</option>
-              <option ${m.satisfaction==='N/A'?'selected':''}>N/A</option>
+              <option value="Excellente" ${m.satisfaction==='Excellente'?'selected':''}>${opt('satisfaction','Excellente')}</option>
+              <option value="Très bien" ${m.satisfaction==='Très bien'?'selected':''}>${opt('satisfaction','Très bien')}</option>
+              <option value="Bonne" ${m.satisfaction==='Bonne'?'selected':''}>${opt('satisfaction','Bonne')}</option>
+              <option value="Moyenne" ${m.satisfaction==='Moyenne'?'selected':''}>${opt('satisfaction','Moyenne')}</option>
+              <option value="Mauvaise" ${m.satisfaction==='Mauvaise'?'selected':''}>${opt('satisfaction','Mauvaise')}</option>
+              <option value="N/A" ${m.satisfaction==='N/A'?'selected':''}>${opt('satisfaction','N/A')}</option>
             </select>
           </div>
         </div>
       </div>
 
       <div class="actions-row">
-        <button class="btn secondary" style="width:auto;flex:1" onclick="generateReport(${idx})">Générer le rapport</button>
-        <span class="copy-feedback" id="${fieldId(idx,'feedback')}">Copié ✓</span>
+        <button class="btn secondary" style="width:auto;flex:1" onclick="generateReport(${idx})">${t('report.generate')}</button>
+        <span class="copy-feedback" id="${fieldId(idx,'feedback')}">${t('report.copied')}</span>
       </div>
       <div class="output" id="${fieldId(idx,'output')}" style="display:none">
         <pre id="${fieldId(idx,'pre')}"></pre>
-        <button class="btn ghost" onclick="copyReport(${idx})">Copier le texte</button>
+        <button class="btn ghost" onclick="copyReport(${idx})">${t('report.copyText')}</button>
       </div>
     </div>
   </div>`;
@@ -348,12 +371,12 @@ function render(){
   const container = document.getElementById('missionsContainer');
   let html = '';
   if(missions.length === 0){
-    html += '<div class="empty">Aucune mission pour l\'instant. Extrais le planning ou ajoute une mission manuelle.</div>';
+    html += `<div class="empty">${t('missions.empty')}</div>`;
   } else {
-    html += '<button class="btn full-ghost" onclick="addManualMission()" style="margin-bottom:10px">+ Ajouter une mission manuelle</button>';
+    html += `<button class="btn full-ghost" onclick="addManualMission()" style="margin-bottom:10px">${t('missions.addManual')}</button>`;
     html += missions.map((m,i)=>renderMission(m,i)).join('');
   }
-  html += '<button class="btn full-ghost" onclick="addManualMission()">+ Ajouter une mission manuelle</button>';
+  html += `<button class="btn full-ghost" onclick="addManualMission()">${t('missions.addManual')}</button>`;
   container.innerHTML = html;
 }
 
@@ -512,11 +535,11 @@ function validateMission(idx){
 function generateReport(idx){
   const missing = validateMission(idx);
   if(missing.length){
-    const labels = { booking:'Booking #', vol:'Vol', terminal:'Terminal', pax:'Nombre de passagers' };
+    const labels = { booking:t('validation.booking'), vol:t('validation.flight'), terminal:t('validation.terminal'), pax:t('validation.pax') };
     const list = missing.map(f => labels[f] || f).join(', ');
     const fb = document.getElementById(fieldId(idx,'feedback'));
     if(fb){
-      fb.textContent = 'Champs manquants : ' + list;
+      fb.textContent = t('validation.missingFields') + list;
       fb.classList.add('err', 'show');
       setTimeout(()=>fb.classList.remove('show'), 3500);
     }
@@ -573,12 +596,12 @@ async function copyReport(idx){
 
   const fb = document.getElementById(fieldId(idx,'feedback'));
   if(ok){
-    fb.textContent = 'Copié ✓';
+    fb.textContent = t('report.copied');
     fb.classList.remove('err');
     fb.classList.add('show');
     setTimeout(()=>fb.classList.remove('show'), 1500);
   }else{
-    fb.textContent = 'Échec — sélectionne et copie à la main';
+    fb.textContent = t('report.copyFailed');
     fb.classList.add('err', 'show');
     setTimeout(()=>{ fb.classList.remove('show'); }, 3000);
   }
@@ -620,13 +643,14 @@ window.undoMissions = undoMissions;
 window.clearPlanningInput = clearPlanningInput;
 window.clearState = clearState;
 window.openPdfPicker = openPdfPicker;
+window.toggleLang = toggleLang;
 
 
 document.getElementById('extractBtn').addEventListener('click', () => {
   syncAll();
   const porter = getPorterName();
   if(!porter){
-    alert('Indique un nom de porteur.');
+    alert(t('alert.needPorter'));
     return;
   }
   const text = document.getElementById('planningInput').value;
@@ -636,6 +660,7 @@ document.getElementById('extractBtn').addEventListener('click', () => {
   reloadForPorter();
 });
 
+applyStaticTranslations();
 render();
 
 // Restaure la session du jour, puis sauvegarde à chaque modification.
@@ -664,14 +689,14 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
     const file = this.files[0];
     if(!file) return;
     const porter = getPorterName();
-    if(!porter){ alert('Indique un nom de porteur avant de charger le PDF.'); this.value=''; return; }
+    if(!porter){ alert(t('alert.needPorterPdf')); this.value=''; return; }
 
     status.style.display = 'block';
     status.style.color = '';
-    status.textContent = '⏳ Lecture du PDF…';
+    status.textContent = t('pdf.reading');
 
     try {
-      if(typeof pdfjsLib === 'undefined') throw new Error('pdf.js non chargé — vérifie ta connexion.');
+      if(typeof pdfjsLib === 'undefined') throw new Error(t('pdf.notLoaded'));
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -719,9 +744,9 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
       if(extracted.length === 0){
         missions = [];
         document.getElementById('missionsContainer').innerHTML =
-          '<div class="empty">Aucune mission trouvée pour "' + porter + '" dans ce PDF. Vérifie le nom du porteur.</div>' +
-          '<button class="btn full-ghost" onclick="addManualMission()">+ Ajouter une mission manuelle</button>';
-        status.textContent = '⚠️ Aucune mission pour « ' + porter + ' ».';
+          `<div class="empty">${escHtml(t('missions.emptyForPorterPdf', { porter }))}</div>` +
+          `<button class="btn full-ghost" onclick="addManualMission()">${t('missions.addManual')}</button>`;
+        status.textContent = t('pdf.noMissions', { porter });
         status.style.color = '#c0392b';
         this.value = '';
         return;
@@ -731,10 +756,10 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
       render();
       saveState();
       const n = extracted.length;
-      status.textContent = `✅ ${n} mission${n>1?'s':''} extraite${n>1?'s':''} (${pdf.numPages} page${pdf.numPages>1?'s':''}).`;
+      status.textContent = t('pdf.success', { n, pages: pdf.numPages });
       status.style.color = '#27ae60';
     } catch(e) {
-      status.textContent = '❌ Erreur : ' + e.message;
+      status.textContent = t('pdf.error', { message: e.message });
       status.style.color = '#c0392b';
     }
     this.value = '';
