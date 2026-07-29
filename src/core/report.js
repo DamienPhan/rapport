@@ -38,7 +38,9 @@ export function generateReportText(m) {
   const clientLine = m.greeteur ? `${naIfEmpty(m.client)} - Greeteur : ${m.greeteur}` : naIfEmpty(m.client);
   const bookingDisp = String(m.booking ?? '').trim() ? `#${m.booking}` : 'N/A';
 
-  return `1. Informations générales
+  return `Total Bagages pris en charge : ${total}
+
+1. Informations générales
 Booking : ${bookingDisp}
 Date : ${naIfEmpty(m.date)}
 Client : ${clientLine}
