@@ -40,6 +40,8 @@ export function generateReportText(m) {
 
   return `**TOTAL BAGAGES PRIS EN CHARGE : ${total}**
 
+
+
 1. Informations générales
 Booking : ${bookingDisp}
 Date : ${naIfEmpty(m.date)}
