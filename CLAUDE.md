@@ -69,6 +69,12 @@ core a besoin d'une donnée du DOM, l'UI la lit et la passe en argument. Les
 handlers appelés en `onclick=`/`onchange=` inline doivent être exposés via
 `window.X = X` à la fin de `ui/app.js` (sinon invisibles en scope module).
 
+**`src/i18n/`** (traduction de l'interface FR/EN, voir §5 point 29) suit la
+même logique que `store/` : `lang.js` touche `localStorage`/`navigator` mais
+jamais `document` ; c'est `ui/app.js` seul qui applique les traductions au
+DOM. `src/core/` ne connaît RIEN de la langue de l'UI — voir §5 point 29
+pour la raison (le rapport final doit toujours être en français).
+
 Aucun backend. `pdf.js` est chargé depuis un CDN. Les modules ES exigent
 `http://` (servir via `npm run serve`), pas `file://`.
 
@@ -467,6 +473,41 @@ un bug déjà corrigé) :
     revérifié dans le navigateur (détaxe/satisfaction/porteurs modifiés sur
     une mission, rapport généré, nouvelle mission ajoutée → repart bien des
     valeurs fixes, pas de celles saisies).
+29. **Interface bilingue FR/EN, rapport final toujours en français** :
+    demande explicite de l'utilisateur (colonie de porteurs pas tous
+    francophones). Trois nouveaux fichiers : `src/i18n/translations.js`
+    (dictionnaires `fr`/`en`, chaînes fixes ou fonctions pour l'interpolation/
+    pluriel — ex. `pdf.success({n, pages})`), `src/i18n/lang.js`
+    (`detectLang()` via `navigator.languages`, `getLang()`/`setLang()` via
+    `localStorage['appLang']`, `t(lang, key, vars)`, `optionLabel(lang, group,
+    value)` — voir §2 pour la frontière core/store/ui respectée). Détection :
+    anglais si une langue du téléphone commence par `en`, français par défaut
+    sinon (équipe francophone, l'anglais est la seule alternative utile).
+    Bouton de bascule (`#langToggle` dans le header, `toggleLang()` dans
+    `ui/app.js`) : persiste le choix explicite dans `localStorage`, qui prime
+    ensuite sur la détection à chaque rechargement.
+    **Décision centrale, à ne jamais casser** : les VALEURS métier stockées
+    dans une mission (`détaxe`, `lieuRencontre`/`lieuDepose`, `satisfaction`,
+    `prebooking`, `type` ARR/DEP/TRS...) restent des constantes françaises
+    fixes, quelle que soit la langue de l'UI — c'est ce que lisent
+    `src/core/*.js` et ce qui part tel quel dans `generateReportText()`. Pour
+    les `<select>` dont l'option affichée doit être traduite (détaxe, lieux,
+    satisfaction, pré-booking), chaque `<option>` a désormais un attribut
+    `value="…"` explicite fixé à la valeur française canonique — avant cette
+    feature, ces `<option>` n'avaient pas de `value` et la valeur retombait
+    implicitement sur le texte affiché ; sans cet attribut explicite, traduire
+    le texte aurait silencieusement changé la valeur lue par `el.value` et
+    cassé `generateReportText`/`applyPlaceDefaults`/`markNoShow`, qui
+    matchent sur ces chaînes exactes. Le type ARR/DEP/TRS et les noms de
+    porteurs/greeters (données propres, pas de l'UI) ne sont jamais traduits.
+    Testé dans le navigateur (skill `run-rapport`) : `navigator.language`
+    forcé à `en-US` par défaut dans Chromium headless → détection automatique
+    en anglais confirmée sans action manuelle ; bascule EN→FR confirmée ;
+    préférence explicite confirmée persistante après rechargement de page ;
+    valeurs de `<select>` vérifiées inchangées (`["Non","Dépose
+    minute","Excellente","LIVE"]`) malgré l'affichage anglais ; rapport généré
+    en interface anglaise vérifié caractère pour caractère toujours en
+    français.
 
 ---
 

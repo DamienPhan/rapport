@@ -4,22 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0b1b2e">
-<title>Rapports de mission — Well'Com Air</title>
+<title data-i18n="app.title">Rapports de mission — Well'Com Air</title>
 <link rel="stylesheet" href="src/styles/main.css">
 </head>
 <body>
 
 <header>
+  <button type="button" id="langToggle" class="lang-toggle" onclick="toggleLang()">EN</button>
   <div class="wordmark">WELL'COM AIR</div>
-  <h1>Rapports de mission</h1>
-  <p>Choisis le porteur, colle le planning du jour, extrait automatiquement ses missions et complète les champs restants.</p>
+  <h1 data-i18n="app.heading">Rapports de mission</h1>
+  <p data-i18n="header.tagline">Choisis le porteur, colle le planning du jour, extrait automatiquement ses missions et complète les champs restants.</p>
 </header>
 
 <main>
   <div class="panel">
-    <h2>1. Porteur</h2>
+    <h2 data-i18n="porter.heading">1. Porteur</h2>
     <div class="field">
-      <label>Nom du porteur</label>
+      <label data-i18n="porter.label">Nom du porteur</label>
       <select id="porterSelect" onchange="togglePorterCustom(); reloadForPorter()">
         <option>Damien P.</option>
         <option>Adam E</option>
@@ -53,27 +54,27 @@
       </select>
     </div>
     <div class="field" id="porterCustomField" style="display:none">
-      <label>Nom exact (comme dans le planning)</label>
-      <input id="porterCustom" placeholder="ex: Bastien" onchange="reloadForPorter()">
+      <label data-i18n="porter.customLabel">Nom exact (comme dans le planning)</label>
+      <input id="porterCustom" data-i18n-placeholder="porter.customPlaceholder" placeholder="ex: Bastien" onchange="reloadForPorter()">
     </div>
   </div>
 
   <div class="panel">
-    <h2>2. Planning du jour</h2>
+    <h2 data-i18n="planning.heading">2. Planning du jour</h2>
     <div class="pdfrow">
-      <button class="btn pdfbtn" type="button" onclick="openPdfPicker()">📄 Charger le PDF (recommandé)</button>
+      <button class="btn pdfbtn" type="button" onclick="openPdfPicker()" data-i18n="planning.loadPdf">📄 Charger le PDF (recommandé)</button>
       <input id="pdfInput" type="file" accept=".pdf,application/pdf" style="position:absolute;left:-9999px;opacity:0;width:1px;height:1px">
     </div>
     <div id="pdfStatus" class="hint" style="display:none"></div>
-    <div class="orsep">— ou colle le texte —</div>
-    <textarea id="planningInput" placeholder="Colle ici le texte du planning..."></textarea>
+    <div class="orsep" data-i18n="planning.orSep">— ou colle le texte —</div>
+    <textarea id="planningInput" data-i18n-placeholder="planning.placeholder" placeholder="Colle ici le texte du planning..."></textarea>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <button class="btn" id="extractBtn" style="flex:1 1 100%">Extraire les missions de ce porteur</button>
-      <button class="btn full-ghost" onclick="clearPlanningInput()" style="flex:1 1 0">Vider le copier-coller</button>
-      <button class="btn full-ghost" onclick="undoMissions()" id="undoBtn" style="flex:1 1 0" disabled>↩ Annuler</button>
+      <button class="btn" id="extractBtn" style="flex:1 1 100%" data-i18n="planning.extract">Extraire les missions de ce porteur</button>
+      <button class="btn full-ghost" onclick="clearPlanningInput()" style="flex:1 1 0" data-i18n="planning.clearPaste">Vider le copier-coller</button>
+      <button class="btn full-ghost" onclick="undoMissions()" id="undoBtn" style="flex:1 1 0" disabled data-i18n="planning.undo">↩ Annuler</button>
     </div>
-    <button class="btn full-ghost" onclick="clearState()" style="margin-top:6px">Effacer la session enregistrée</button>
-    <div class="hint">Tes données (porteur, planning, missions) sont enregistrées sur ce téléphone et restaurées si la page se recharge. Elles s'effacent automatiquement le lendemain. Le PDF est lu localement, rien n'est envoyé en ligne.</div>
+    <button class="btn full-ghost" onclick="clearState()" style="margin-top:6px" data-i18n="planning.clearSession">Effacer la session enregistrée</button>
+    <div class="hint" data-i18n="planning.hint">Tes données (porteur, planning, missions) sont enregistrées sur ce téléphone et restaurées si la page se recharge. Elles s'effacent automatiquement le lendemain. Le PDF est lu localement, rien n'est envoyé en ligne.</div>
   </div>
 
   <div id="missionsContainer"></div>
