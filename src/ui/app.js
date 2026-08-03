@@ -221,16 +221,19 @@ function renderMission(m, idx){
   return `
   <div class="mission${isOpen?' open':''}" data-idx="${idx}">
     <div class="mission-head" onclick="toggleMission(${idx})">
-      <div class="mhead-main">
-        <strong>${m.booking || t('missions.newMission')}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
-        ${summary ? `<div class="mhead-summary">${escHtml(summary)}</div>` : ''}
+      <div class="mhead-top">
+        <div class="mhead-main">
+          <strong>${m.booking || t('missions.newMission')}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
+          ${summary ? `<div class="mhead-summary">${escHtml(summary)}</div>` : ''}
+        </div>
+        <div class="mhead-controls">
+          <button class="del" onclick="event.stopPropagation();removeMission(${idx})" title="${t('mission.deleteTitle')}">✕</button>
+          <span class="chevron">▾</span>
+        </div>
       </div>
-      <div class="right">
+      <div class="mhead-tags">
+        <span class="badge badge-${m.type||'Service'}">${typeIcon(m.type)}${m.type || '—'}${m.terminal ? ' · T' + escHtml(m.terminal) : ''}</span>
         <button class="btn-noshow" onclick="event.stopPropagation();markNoShow(${idx})" title="${t('mission.markNoShowTitle')}">${t('mission.noShow')}</button>
-        ${m.terminal ? `<span class="badge badge-terminal">T${escHtml(m.terminal)}</span>` : ''}
-        <span class="badge badge-${m.type||'Service'}">${typeIcon(m.type)}${m.type || '—'}</span>
-        <button class="del" onclick="event.stopPropagation();removeMission(${idx})" title="${t('mission.deleteTitle')}">✕</button>
-        <span class="chevron">▾</span>
       </div>
     </div>
     <div class="mission-body">
