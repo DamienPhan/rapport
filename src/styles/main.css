@@ -163,20 +163,12 @@
   .mhead-top{
     display:flex;
     justify-content:space-between;
-    align-items:flex-start;
+    align-items:center;
     gap:8px;
   }
-  .mission-head .mhead-main{min-width:0;flex:1 1 auto;}
-  .mission-head strong{font-size:.9rem;letter-spacing:.01em;}
+  .mission-head strong{font-size:.9rem;letter-spacing:.01em;min-width:0;overflow-wrap:break-word;}
   .mission-head .mtime{color:var(--gold);font-weight:600;}
-  .mission-head .mhead-summary{
-    font-size:.72rem;
-    color:rgba(255,255,255,.6);
-    margin-top:2px;
-    white-space:normal;
-    overflow-wrap:break-word;
-  }
-  .mhead-controls{display:flex;align-items:center;gap:10px;flex-shrink:0;padding-top:1px;}
+  .mhead-controls{display:flex;align-items:center;gap:10px;flex-shrink:0;}
   .mission-head .chevron{
     color:var(--gold);
     font-size:.75rem;
@@ -191,7 +183,9 @@
     align-items:center;
     justify-content:space-between;
     gap:8px;
+    flex-wrap:wrap;
   }
+  .mhead-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .mission-head .badge{
     font-size:.68rem;
     display:inline-flex;
@@ -203,6 +197,11 @@
     border-radius:20px;
     font-weight:700;
     letter-spacing:.04em;
+  }
+  .mission-head .badge-terminal{
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.34);
+    color:#fff;
   }
   .mission-head .badge-ARR{background:linear-gradient(180deg,#4fae8e,#2f8f6b);color:#fff;}
   .mission-head .badge-DEP{background:linear-gradient(180deg,#d4b87e,var(--gold));color:var(--navy);}
