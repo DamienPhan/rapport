@@ -153,16 +153,20 @@
     color:#fff;
     padding:9px 14px;
     display:flex;
-    flex-wrap:wrap;
-    justify-content:space-between;
-    align-items:center;
-    gap:6px 8px;
+    flex-direction:column;
+    gap:7px;
     border-bottom:1px solid transparent;
     cursor:pointer;
     user-select:none;
   }
   .mission.open .mission-head{border-bottom-color:var(--gold);}
-  .mission-head .mhead-main{min-width:140px;flex:1 1 auto;}
+  .mhead-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:8px;
+  }
+  .mission-head .mhead-main{min-width:0;flex:1 1 auto;}
   .mission-head strong{font-size:.9rem;letter-spacing:.01em;}
   .mission-head .mtime{color:var(--gold);font-weight:600;}
   .mission-head .mhead-summary{
@@ -172,7 +176,7 @@
     white-space:normal;
     overflow-wrap:break-word;
   }
-  .mission-head .right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+  .mhead-controls{display:flex;align-items:center;gap:10px;flex-shrink:0;padding-top:1px;}
   .mission-head .chevron{
     color:var(--gold);
     font-size:.75rem;
@@ -182,6 +186,12 @@
   .mission.open .mission-head .chevron{transform:rotate(180deg);}
   .mission-body{display:none;}
   .mission.open .mission-body{display:block;}
+  .mhead-tags{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
   .mission-head .badge{
     font-size:.68rem;
     display:inline-flex;
@@ -193,11 +203,6 @@
     border-radius:20px;
     font-weight:700;
     letter-spacing:.04em;
-  }
-  .mission-head .badge-terminal{
-    background:rgba(255,255,255,.12);
-    border:1px solid rgba(255,255,255,.34);
-    color:#fff;
   }
   .mission-head .badge-ARR{background:linear-gradient(180deg,#4fae8e,#2f8f6b);color:#fff;}
   .mission-head .badge-DEP{background:linear-gradient(180deg,#d4b87e,var(--gold));color:var(--navy);}
@@ -214,17 +219,18 @@
     opacity:.8;
   }
   .mission-head .btn-noshow{
-    background:#c0392b;
-    border:1px solid #c0392b;
+    background:rgba(192,57,43,.9);
+    border:1px solid rgba(192,57,43,.9);
     color:#fff;
-    font-size:.68rem;
+    font-size:.66rem;
     font-weight:700;
     letter-spacing:.04em;
     cursor:pointer;
     line-height:1;
-    padding:5px 9px;
+    padding:4px 9px;
     border-radius:6px;
     text-transform:uppercase;
+    flex-shrink:0;
   }
   .mission-head .btn-noshow:active{background:#a52f22;border-color:#a52f22;}
   .mission-body{padding:10px 14px 12px;}
