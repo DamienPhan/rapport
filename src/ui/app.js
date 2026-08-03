@@ -227,6 +227,7 @@ function renderMission(m, idx){
       </div>
       <div class="right">
         <button class="btn-noshow" onclick="event.stopPropagation();markNoShow(${idx})" title="${t('mission.markNoShowTitle')}">${t('mission.noShow')}</button>
+        ${m.terminal ? `<span class="badge badge-terminal">T${escHtml(m.terminal)}</span>` : ''}
         <span class="badge badge-${m.type||'Service'}">${typeIcon(m.type)}${m.type || '—'}</span>
         <button class="del" onclick="event.stopPropagation();removeMission(${idx})" title="${t('mission.deleteTitle')}">✕</button>
         <span class="chevron">▾</span>

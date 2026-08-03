@@ -162,9 +162,8 @@
     font-size:.72rem;
     color:rgba(255,255,255,.6);
     margin-top:2px;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
+    white-space:normal;
+    overflow-wrap:break-word;
   }
   .mission-head .right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
   .mission-head .chevron{
@@ -187,6 +186,11 @@
     border-radius:20px;
     font-weight:700;
     letter-spacing:.04em;
+  }
+  .mission-head .badge-terminal{
+    background:transparent;
+    border:1px solid var(--gold);
+    color:var(--gold);
   }
   .mission-head .badge-ARR{background:linear-gradient(180deg,#4fae8e,#2f8f6b);color:#fff;}
   .mission-head .badge-DEP{background:linear-gradient(180deg,#d4b87e,var(--gold));color:var(--navy);}
