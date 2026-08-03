@@ -30,13 +30,19 @@
     padding:22px 16px 18px;
     border-bottom:2px solid var(--gold);
   }
+  .header-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:6px 10px;
+    margin-bottom:8px;
+  }
   .lang-toggle{
-    position:absolute;
-    top:14px;
-    right:14px;
-    background:transparent;
-    border:1px solid var(--gold);
-    color:var(--gold);
+    flex-shrink:0;
+    background:var(--cream);
+    border:1px solid var(--cream);
+    color:var(--navy);
     border-radius:20px;
     padding:4px 12px;
     font-size:.72rem;
@@ -44,7 +50,7 @@
     letter-spacing:.08em;
     cursor:pointer;
   }
-  .lang-toggle:hover{background:var(--gold);color:var(--navy);}
+  .lang-toggle:hover{background:#fff;}
   .wordmark{
     font-family:"Cormorant Garamond",Georgia,serif;
     font-weight:600;
@@ -52,7 +58,7 @@
     letter-spacing:.34em;
     text-transform:uppercase;
     color:var(--gold);
-    margin:0 0 8px;
+    margin:0;
     padding-left:.12em;
   }
   header h1{
@@ -147,15 +153,16 @@
     color:#fff;
     padding:9px 14px;
     display:flex;
+    flex-wrap:wrap;
     justify-content:space-between;
     align-items:center;
-    gap:8px;
+    gap:6px 8px;
     border-bottom:1px solid transparent;
     cursor:pointer;
     user-select:none;
   }
   .mission.open .mission-head{border-bottom-color:var(--gold);}
-  .mission-head .mhead-main{min-width:0;flex:1;}
+  .mission-head .mhead-main{min-width:140px;flex:1 1 auto;}
   .mission-head strong{font-size:.9rem;letter-spacing:.01em;}
   .mission-head .mtime{color:var(--gold);font-weight:600;}
   .mission-head .mhead-summary{
@@ -188,9 +195,9 @@
     letter-spacing:.04em;
   }
   .mission-head .badge-terminal{
-    background:transparent;
-    border:1px solid var(--gold);
-    color:var(--gold);
+    background:var(--cream);
+    border:1px solid var(--cream);
+    color:var(--navy);
   }
   .mission-head .badge-ARR{background:linear-gradient(180deg,#4fae8e,#2f8f6b);color:#fff;}
   .mission-head .badge-DEP{background:linear-gradient(180deg,#d4b87e,var(--gold));color:var(--navy);}
