@@ -166,8 +166,23 @@
     align-items:center;
     gap:8px;
   }
-  .mission-head strong{font-size:.9rem;letter-spacing:.01em;min-width:0;overflow-wrap:break-word;}
+  .mhead-main{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    min-width:0;
+    flex:1 1 auto;
+  }
+  .mission-head strong{font-size:.9rem;letter-spacing:.01em;flex-shrink:0;white-space:nowrap;}
   .mission-head .mtime{color:var(--gold);font-weight:600;}
+  .mhead-summary{
+    font-size:.72rem;
+    color:rgba(255,255,255,.6);
+    min-width:0;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
   .mhead-controls{display:flex;align-items:center;gap:10px;flex-shrink:0;}
   .mission-head .chevron{
     color:var(--gold);
