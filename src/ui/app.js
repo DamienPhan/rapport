@@ -207,32 +207,24 @@ function typeIcon(type){
   return { ARR: '🛬 ', DEP: '🛫 ', TRS: '🔁 ' }[type] || '🧳 ';
 }
 
-function missionSummary(m){
-  const bits = [];
-  if(m.client) bits.push(m.client);
-  if(m.vol) bits.push(m.vol + (m.terminal ? ' T' + m.terminal : ''));
-  return bits.join(' · ');
-}
-
 function renderMission(m, idx){
   const total = (parseInt(m.bagStandard)||0) + (parseInt(m.bagHorsFormat)||0) + (parseInt(m.bagCage)||0);
   const isOpen = !!m.expanded;
-  const summary = missionSummary(m);
   return `
   <div class="mission${isOpen?' open':''}" data-idx="${idx}">
     <div class="mission-head" onclick="toggleMission(${idx})">
       <div class="mhead-top">
-        <div class="mhead-main">
-          <strong>${m.booking || t('missions.newMission')}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
-          ${summary ? `<div class="mhead-summary">${escHtml(summary)}</div>` : ''}
-        </div>
+        <strong>${m.booking || t('missions.newMission')}${fmtTime(m.sortTime) ? ' <span class="mtime">· ' + fmtTime(m.sortTime) + '</span>' : ''}</strong>
         <div class="mhead-controls">
           <button class="del" onclick="event.stopPropagation();removeMission(${idx})" title="${t('mission.deleteTitle')}">✕</button>
           <span class="chevron">▾</span>
         </div>
       </div>
       <div class="mhead-tags">
-        <span class="badge badge-${m.type||'Service'}">${typeIcon(m.type)}${m.type || '—'}${m.terminal ? ' · T' + escHtml(m.terminal) : ''}</span>
+        <div class="mhead-badges">
+          <span class="badge badge-${m.type||'Service'}">${typeIcon(m.type)}${m.type || '—'}</span>
+          ${m.terminal ? `<span class="badge badge-terminal">T${escHtml(m.terminal)}</span>` : ''}
+        </div>
         <button class="btn-noshow" onclick="event.stopPropagation();markNoShow(${idx})" title="${t('mission.markNoShowTitle')}">${t('mission.noShow')}</button>
       </div>
     </div>
