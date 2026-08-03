@@ -40,9 +40,9 @@
   }
   .lang-toggle{
     flex-shrink:0;
-    background:var(--cream);
-    border:1px solid var(--cream);
-    color:var(--navy);
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.34);
+    color:#fff;
     border-radius:20px;
     padding:4px 12px;
     font-size:.72rem;
@@ -50,7 +50,7 @@
     letter-spacing:.08em;
     cursor:pointer;
   }
-  .lang-toggle:hover{background:#fff;}
+  .lang-toggle:hover{background:rgba(255,255,255,.22);}
   .wordmark{
     font-family:"Cormorant Garamond",Georgia,serif;
     font-weight:600;
@@ -195,9 +195,9 @@
     letter-spacing:.04em;
   }
   .mission-head .badge-terminal{
-    background:var(--cream);
-    border:1px solid var(--cream);
-    color:var(--navy);
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.34);
+    color:#fff;
   }
   .mission-head .badge-ARR{background:linear-gradient(180deg,#4fae8e,#2f8f6b);color:#fff;}
   .mission-head .badge-DEP{background:linear-gradient(180deg,#d4b87e,var(--gold));color:var(--navy);}
