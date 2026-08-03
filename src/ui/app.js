@@ -207,6 +207,12 @@ function typeIcon(type){
   return { ARR: '🛬 ', DEP: '🛫 ', TRS: '🔁 ' }[type] || '🧳 ';
 }
 
+// T1/T2 ont chacun leur propre couleur pour se distinguer d'un coup d'œil ;
+// tout autre numéro (repli) garde le style neutre d'origine.
+function terminalBadgeClass(term){
+  return { '1': 'badge-terminal-1', '2': 'badge-terminal-2' }[term] || 'badge-terminal';
+}
+
 // Terminal et type ont déjà leur propre badge (ligne 2) : pas besoin de les
 // répéter ici, juste de quoi identifier le client/la mission d'un coup d'œil.
 function missionSummary(m){
@@ -234,11 +240,11 @@ function renderMission(m, idx){
         </div>
       </div>
       <div class="mhead-tags">
+        <button class="btn-noshow" onclick="event.stopPropagation();markNoShow(${idx})" title="${t('mission.markNoShowTitle')}">${t('mission.noShow')}</button>
         <div class="mhead-badges">
           <span class="badge badge-${m.type||'Service'}">${typeIcon(m.type)}${m.type || '—'}</span>
-          ${m.terminal ? `<span class="badge badge-terminal">T${escHtml(m.terminal)}</span>` : ''}
+          ${m.terminal ? `<span class="badge ${terminalBadgeClass(m.terminal)}">T${escHtml(m.terminal)}</span>` : ''}
         </div>
-        <button class="btn-noshow" onclick="event.stopPropagation();markNoShow(${idx})" title="${t('mission.markNoShowTitle')}">${t('mission.noShow')}</button>
       </div>
     </div>
     <div class="mission-body">

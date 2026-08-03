@@ -218,6 +218,16 @@
     border:1px solid rgba(255,255,255,.34);
     color:#fff;
   }
+  .mission-head .badge-terminal-1{
+    background:rgba(90,169,230,.28);
+    border:1px solid rgba(90,169,230,.7);
+    color:#eaf5ff;
+  }
+  .mission-head .badge-terminal-2{
+    background:rgba(214,120,150,.28);
+    border:1px solid rgba(214,120,150,.7);
+    color:#fff0f4;
+  }
   .mission-head .badge-ARR{background:linear-gradient(180deg,#4fae8e,#2f8f6b);color:#fff;}
   .mission-head .badge-DEP{background:linear-gradient(180deg,#d4b87e,var(--gold));color:var(--navy);}
   .mission-head .badge-TRS{background:linear-gradient(180deg,#8a8fc2,#6b6f9c);color:#fff;}
