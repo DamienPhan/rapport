@@ -60,6 +60,8 @@ export const translations = {
     note: {
       greetSign: 'Panneau',
       bagExpected: 'Bagages prévus',
+      bagHorsFormatSuffix: 'hors format',
+      porter: 'Note',
     },
     section: {
       identity: 'Identité',
@@ -192,6 +194,8 @@ export const translations = {
     note: {
       greetSign: 'Sign',
       bagExpected: 'Expected bags',
+      bagHorsFormatSuffix: 'oversized',
+      porter: 'Note',
     },
     section: {
       identity: 'Identity',

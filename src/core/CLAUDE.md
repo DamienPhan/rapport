@@ -152,6 +152,15 @@ absorbe les petites variations de mise en page entre PDF.
   ajouté au bloc services : toujours tester sur un cluster de missions
   serrées avec un bloc haut, pas seulement sur une mission isolée — c'est
   précisément le cas qui a révélé le bug d'attribution.
+  **Débordement de colonne sur l'axe X** (CLAUDE.md racine §5 point 35) :
+  un texte assez long (Greet Sign, note libre au porteur) peut voir son
+  dernier mot dépasser de quelques pixels la frontière géométrique entre la
+  dernière colonne note (5) et la colonne Type (6) — `colOf()` classe ce
+  mot à tort dans Type et il disparaît de la collecte. Fix : `isNoteCol(x,
+  centers, noteCols, overflowMargin)` élargit uniquement cette frontière
+  d'une marge fixe (`cfg.pdfTable.noteOverflowMargin`), mesurée pour
+  laisser une marge de sécurité par rapport au contenu Type légitime le
+  plus proche — jamais appliquée aux autres frontières de colonnes.
 
 **Validation empirique** : testé sur 4 plannings réels distincts
 (19/06, 20/06 x2, 21/06), **toujours 100 % des missions exactes** sur
@@ -268,6 +277,15 @@ PDF source) :
   (voir CLAUDE.md racine §5 point 32). **Fixture de test.** Trois autres
   plannings du même format (26/31/24 juillet) ont servi à la validation
   croisée mais ne sont pas committés — redemander à l'utilisateur si besoin.
+- `planning-04-hors-format-note.pdf` (04/08) — contient le bagage hors
+  format (`N x BAGAGE HORS FORMAT`, distinct du supplémentaire) et la note
+  libre au porteur avant `Greet Sign:` (« N bags payé... »). Contient aussi
+  deux Greet Sign volontairement longs (« Moshe Benish », « Salame prince
+  Bassam Omar ») qui valident le fix de débordement de colonne X (le
+  dernier mot d'un texte note assez long peut dépasser la frontière
+  col5/col6 et être exclu à tort par `colOf()` strict — voir CLAUDE.md
+  racine §5 point 35, `isNoteCol`/`noteOverflowMargin`). **Fixture de
+  test.**
 
 **Protocole minimal avant de livrer un changement touchant
 extraction/attribution** :

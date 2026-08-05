@@ -241,6 +241,15 @@ function missionSummary(m){
   return bits.join(' · ');
 }
 
+// Bagages standard + hors format attendus selon la note, combinés dans une
+// seule note de référence (voir CLAUDE.md §5) plutôt que deux banderoles
+// séparées pour un seul et même sujet.
+function bagExpectedText(m){
+  const hf = m.bagHorsFormatExpected && Number(m.bagHorsFormatExpected) > 0 ? m.bagHorsFormatExpected : '';
+  if(!m.bagExpected) return hf ? `+${hf} ${t('note.bagHorsFormatSuffix')}` : '';
+  return hf ? `${m.bagExpected} (+${hf} ${t('note.bagHorsFormatSuffix')})` : m.bagExpected;
+}
+
 function renderMission(m, idx){
   const total = (parseInt(m.bagStandard)||0) + (parseInt(m.bagHorsFormat)||0) + (parseInt(m.bagCage)||0);
   const isOpen = !!m.expanded;
@@ -269,7 +278,8 @@ function renderMission(m, idx){
     <div class="mission-body">
       ${renderCandidates(m, idx)}
       ${m.greetSign ? `<div class="note-banner">🪧 ${t('note.greetSign')} : <strong>${escHtml(m.greetSign)}</strong></div>` : ''}
-      ${m.bagExpected ? `<div class="note-banner">🧳 ${t('note.bagExpected')} : <strong>${escHtml(m.bagExpected)}</strong></div>` : ''}
+      ${bagExpectedText(m) ? `<div class="note-banner">🧳 ${t('note.bagExpected')} : <strong>${escHtml(bagExpectedText(m))}</strong></div>` : ''}
+      ${m.porterNote ? `<div class="note-banner">📌 ${t('note.porter')} : ${escHtml(m.porterNote)}</div>` : ''}
 
       <div class="section">
         <div class="section-title">${t('section.identity')}</div>

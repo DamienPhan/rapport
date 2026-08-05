@@ -19,7 +19,7 @@ import { createMission, applyPlaceDefaults, validateMission, markNoShow } from '
 import { generateReportText } from '../src/core/report.js';
 import { normalizePhone, extractClientPhone } from '../src/core/phone.js';
 import { enrichWithPhones, enrichWithNotes } from '../src/core/enrich.js';
-import { applyNoteBlock } from '../src/core/noteBlock.js';
+import { parseNoteBlock, applyNoteBlock } from '../src/core/noteBlock.js';
 import { translations } from '../src/i18n/translations.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +63,21 @@ test('markNoShow garde l\'identité, met le reste à N/A', () => {
   assert.strictEqual(m.vol, 'AF123');
   assert.strictEqual(m.pax, 'N/A');
   assert.strictEqual(m.probleme, 'NO SHOW');
+});
+
+test('markNoShow vide aussi les repères de note (greetSign/bagExpected/bagHorsFormatExpected/porterNote)', () => {
+  const m = createMission();
+  Object.assign(m, {
+    booking: '10743-1', vol: 'AF123', terminal: '2', type: 'ARR', pax: '3',
+    greetSign: 'Moshe Benish', bagExpected: '12', bagHorsFormatExpected: '3',
+    porterNote: '15 bags payé (si supp bags = a régler avec le porteur)',
+  });
+  markNoShow(m);
+  // Pas de bannière de note périmée pour un client qui ne s'est jamais présenté.
+  assert.strictEqual(m.greetSign, '');
+  assert.strictEqual(m.bagExpected, '');
+  assert.strictEqual(m.bagHorsFormatExpected, '');
+  assert.strictEqual(m.porterNote, '');
 });
 
 test('createMission ne fait jamais hériter aucun champ d\'une mission précédente (bagages, détaxe, lieux, porteurs, satisfaction...)', () => {
@@ -203,6 +218,84 @@ inclus dans le forfait
   assert.strictEqual(missions[1].bagStandard, '1');
 });
 
+test('enrichWithNotes calcule bagHorsFormatExpected sans toucher bagHorsFormat', () => {
+  const missions = [
+    { booking: '12160-1', type: 'ARR', greetSign: '', bagStandard: '1', bagExpected: '', bagHorsFormat: '0', bagHorsFormatExpected: '', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
+    { booking: '12160-2', type: 'ARR', greetSign: '', bagStandard: '1', bagExpected: '', bagHorsFormat: '0', bagHorsFormatExpected: '', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
+  ];
+  const fullText = `
+12160-1
+1 x BAGAGE STANDARD
+inclus dans le forfait
+------------------------------
+3 x BAGAGE
+HORS FORMAT
++15€/piece
+------------------------------
+12160-2
+1 x BAGAGE STANDARD
+inclus dans le forfait
+------------------------------
+`;
+  enrichWithNotes(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].bagHorsFormatExpected, '3');
+  assert.strictEqual(missions[0].bagHorsFormat, '0'); // jamais écrasé, reste au champ saisi par le porteur
+  assert.strictEqual(missions[1].bagHorsFormatExpected, ''); // absent du bloc, pas de valeur imposée
+});
+
+test('enrichWithNotes capture la note libre au porteur ("N bags payé") avant Greet Sign', () => {
+  const missions = [
+    { booking: '12160-1', type: 'ARR', greetSign: '', porterNote: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
+    { booking: '12160-2', type: 'ARR', greetSign: '', porterNote: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
+  ];
+  const fullText = `
+12160-1
+Stéphane M.
++33 6 00 00 00 00
+15 bags payé (si supp bags = a régler avec le porteur)
+Greet Sign: Moshe Benish
+Flight Class : business
+==============================
+12160-2
+Gabriel K
++33 6 00 00 00 01
+Greet Sign: Randa Mudarris
+Flight Class : business
+==============================
+`;
+  enrichWithNotes(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].porterNote, '15 bags payé (si supp bags = a régler avec le porteur)');
+  assert.strictEqual(missions[0].greetSign, 'Moshe Benish');
+  assert.strictEqual(missions[1].porterNote, ''); // pas de note libre pour cette mission, greetSign non affecté
+  assert.strictEqual(missions[1].greetSign, 'Randa Mudarris');
+});
+
+test('parseNoteBlock : porterPaidBagsNote reste correct quand la note est coupée sur deux lignes PDF', () => {
+  // Cas réel (planning-04-hors-format-note.pdf) : la ligne PDF "(si supp
+  // bags..." est coupée en deux mots de colonne, donc `\n` retombe AVANT la
+  // parenthèse fermante — un simple `[^)\n]*` la tronquerait (régression
+  // détectée en revue, voir CLAUDE.md racine §5 point 35/36).
+  const text = '15 bags payé (si supp\nbags = a régler avec le porteur)\nGreet Sign: Moshe Benish\nFlight Class : business';
+  const parsed = parseNoteBlock(text, siteConfig);
+  assert.strictEqual(parsed.porterNote, '15 bags payé (si supp bags = a régler avec le porteur)');
+});
+
+test('parseNoteBlock : porterPaidBagsNote tolère une note sans parenthèse fermante, bornée à Greet Sign', () => {
+  const text = '15 bags payé\nGreet Sign: Moshe Benish\nFlight Class : business';
+  const parsed = parseNoteBlock(text, siteConfig);
+  assert.strictEqual(parsed.porterNote, '15 bags payé');
+  assert.strictEqual(parsed.greetSign, 'Moshe Benish'); // non contaminé par la note
+});
+
+test('parseNoteBlock : porterPaidBagsNote ne déborde pas sur une parenthèse lointaine après Greet Sign', () => {
+  // Une parenthèse existe plus loin dans le texte (ex. contenu Type-column
+  // "Arrivée (jusqu'à 4 bagages inclus)") — la capture doit s'arrêter à
+  // "Greet Sign", jamais courir jusqu'à cette parenthèse lointaine.
+  const text = '15 bags payé\nGreet Sign: Moshe Benish\nFlight Class : business\n==============================\nArrivée (jusqu’à 4 bagages inclus)';
+  const parsed = parseNoteBlock(text, siteConfig);
+  assert.strictEqual(parsed.porterNote, '15 bags payé');
+});
+
 test('enrichWithNotes détecte l\'assistance détaxe prépayée', () => {
   const missions = [{ booking: '11899-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' }];
   const fullText = `
@@ -291,6 +384,8 @@ const fixtures = [
   { file: 'planning-23-double-hash.pdf', porter: 'Damien P.', expect: { hasVol: 'EJU1687', booking: '31309' } },
   { file: 'planning-24-greeter-no-colon.pdf', porter: 'Falco P.', expect: { hasVol: 'EY37', greeteur: 'Louane' } },
   { file: 'planning-25-services-block.pdf', porter: 'François L.', expect: { hasVol: 'AC0815', booking: '31106' } },
+  { file: 'planning-04-hors-format-note.pdf', porter: 'Stéphane M.', expect: { hasVol: 'AF7314', booking: '2026-002605' } },
+  { file: 'planning-04-hors-format-note.pdf', porter: 'Thomas C.', expect: { hasVol: 'AZ354', booking: '2026-002628' } },
 ];
 
 async function runPdfTests() {
@@ -368,6 +463,34 @@ async function runPdfTests() {
         assert.strictEqual(arrivee.bagExpected, '5');
         assert.strictEqual(arrivee.bagStandard, '1');
         assert.strictEqual(arrivee.lieuDepose, 'Parking pro');
+      });
+    }
+
+    // Bagages hors format + note libre au porteur ("N bags payé...") avant
+    // Greet Sign — voir CLAUDE.md racine. Ce fixture contient aussi le cas de
+    // régression du débordement de colonne (nom de Greet Sign long dont le
+    // dernier mot dépasse la frontière col5/col6, voir `isNoteCol` dans
+    // parser-pdf.js) : "Moshe Benish" et "Salame prince Bassam Omar" doivent
+    // être capturés en entier, pas tronqués au premier mot.
+    if (fx.file === 'planning-04-hors-format-note.pdf' && fx.porter === 'Stéphane M.') {
+      test(`${fx.file} / ${fx.porter} : bagage hors format + note libre porteur`, () => {
+        const m = missions.find((x) => x.vol === 'AF7314');
+        assert.ok(m, 'mission AF7314 introuvable');
+        assert.strictEqual(m.greetSign, 'Moshe Benish'); // nom complet malgré le débordement de colonne
+        assert.strictEqual(m.bagExpected, '12'); // 4 inclus + 8 supplémentaires
+        assert.strictEqual(m.bagHorsFormatExpected, '3');
+        assert.strictEqual(m.bagStandard, '1'); // jamais écrasé
+        assert.strictEqual(m.bagHorsFormat, '0'); // jamais écrasé
+        assert.strictEqual(m.porterNote, '15 bags payé (si supp bags = a régler avec le porteur)');
+      });
+    }
+    if (fx.file === 'planning-04-hors-format-note.pdf' && fx.porter === 'Thomas C.') {
+      test(`${fx.file} / ${fx.porter} : nom de Greet Sign long capturé en entier`, () => {
+        const m = missions.find((x) => x.vol === 'AZ354');
+        assert.ok(m, 'mission AZ354 introuvable');
+        assert.strictEqual(m.greetSign, 'Salame prince Bassam Omar');
+        assert.strictEqual(m.bagExpected, '4');
+        assert.strictEqual(m.bagHorsFormatExpected, '');
       });
     }
   }
