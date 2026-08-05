@@ -245,10 +245,9 @@ function missionSummary(m){
 // seule note de référence (voir CLAUDE.md §5) plutôt que deux banderoles
 // séparées pour un seul et même sujet.
 function bagExpectedText(m){
-  if(!m.bagExpected) return '';
-  return m.bagHorsFormatExpected
-    ? `${m.bagExpected} (+${m.bagHorsFormatExpected} ${t('note.bagHorsFormatSuffix')})`
-    : m.bagExpected;
+  const hf = m.bagHorsFormatExpected && Number(m.bagHorsFormatExpected) > 0 ? m.bagHorsFormatExpected : '';
+  if(!m.bagExpected) return hf ? `+${hf} ${t('note.bagHorsFormatSuffix')}` : '';
+  return hf ? `${m.bagExpected} (+${hf} ${t('note.bagHorsFormatSuffix')})` : m.bagExpected;
 }
 
 function renderMission(m, idx){
@@ -279,7 +278,7 @@ function renderMission(m, idx){
     <div class="mission-body">
       ${renderCandidates(m, idx)}
       ${m.greetSign ? `<div class="note-banner">🪧 ${t('note.greetSign')} : <strong>${escHtml(m.greetSign)}</strong></div>` : ''}
-      ${m.bagExpected ? `<div class="note-banner">🧳 ${t('note.bagExpected')} : <strong>${escHtml(bagExpectedText(m))}</strong></div>` : ''}
+      ${bagExpectedText(m) ? `<div class="note-banner">🧳 ${t('note.bagExpected')} : <strong>${escHtml(bagExpectedText(m))}</strong></div>` : ''}
       ${m.porterNote ? `<div class="note-banner">📌 ${t('note.porter')} : ${escHtml(m.porterNote)}</div>` : ''}
 
       <div class="section">

@@ -81,6 +81,11 @@ export function createManualMission() {
 
 /**
  * Transforme une mission en NO SHOW : conserve l'identité, met le reste à N/A.
+ * Les repères de note (greetSign/bagExpected/bagHorsFormatExpected/porterNote,
+ * voir §5 points 32-33-35) sont aussi vidés : ce ne sont pas des champs
+ * éditables du formulaire donc pas de valeur "N/A" à leur donner, mais les
+ * laisser tels quels afficherait des bannières de bagages attendus/note
+ * périmées pour un client qui ne s'est jamais présenté.
  */
 export function markNoShow(mission) {
   mission.pax = 'N/A';
@@ -94,6 +99,10 @@ export function markNoShow(mission) {
   mission.lieuDeposeAutre = '';
   mission.satisfaction = 'N/A';
   mission.probleme = 'NO SHOW';
+  mission.greetSign = '';
+  mission.bagExpected = '';
+  mission.bagHorsFormatExpected = '';
+  mission.porterNote = '';
   return mission;
 }
 

@@ -104,9 +104,17 @@ export const siteConfig = {
     /**
      * Note libre avant `Greet Sign:` confirmant le total prépayé (« N bags
      * payé (si supp bags = a régler avec le porteur) ») — distincte du
-     * panneau d'accueil, capturée telle quelle (voir noteBlock.js).
+     * panneau d'accueil, capturée telle quelle (voir noteBlock.js). Bornée
+     * par la première occurrence de `)` OU du libellé `Greet Sign`/`====`
+     * (jamais l'un après l'autre — la note précède toujours Greet Sign dans
+     * le bloc), pas par `\n` seul : la note peut elle-même être coupée sur
+     * plusieurs lignes PDF (« ...si supp\nbags = a régler... »), un simple
+     * saut de ligne ne doit donc pas tronquer la capture avant la parenthèse
+     * fermante réelle. Tolère aussi l'absence totale de parenthèse (texte
+     * variable comme « 15 bags payé » seul) sans perdre toute la note faute
+     * de `)` à matcher, et sans jamais avaler le contenu après Greet Sign.
      */
-    porterPaidBagsNote: /\d+\s*bags?\s*pay[ée][^)]*\)/i,
+    porterPaidBagsNote: /\d+\s*bags?\s*pay[ée][\s\S]*?(?:\)|(?=greet\s*sign|={5,}))/i,
   },
 
   /** Règles bagages propres au forfait Well'Com Air (voir bloc « services » ci-dessus). */

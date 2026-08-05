@@ -814,6 +814,96 @@ un bug déjà corrigé) :
       tronqué à « Moshe »), « 🧳 Expected bags : 12 (+3 oversized) »,
       « 📌 Note : 15 bags payé (si supp bags = a régler avec le porteur) »
       (texte entier, pas de mot manquant).
+36. **`/code-review` du commit du point 35 — 7 agents en parallèle, 5 bugs
+    confirmés et corrigés** : deux passes de revue indépendantes (une
+    commande locale + une équipe de sous-agents) ont convergé sur les mêmes
+    constats, tous vérifiés puis corrigés :
+    - **Bannière bagages masquée quand seul `bagHorsFormatExpected` est
+      connu** (`src/ui/app.js`) : la bannière « Bagages prévus » n'était
+      affichée que si `m.bagExpected` était non vide — si le bloc note
+      contient une ligne « HORS FORMAT » mais que la ligne « BAGAGE
+      STANDARD » ne matche pas (mise en page future imprévue), le hors
+      format extrait restait invisible. Fix : `bagExpectedText(m)` gère
+      désormais aussi le cas « hors format seul » (`+3 hors format` sans
+      total devant), et la condition d'affichage se base sur son résultat
+      plutôt que sur `m.bagExpected` seul.
+    - **`bagExpectedText` traitait `'0'` comme vrai** (même fichier) : un
+      hypothétique « 0 x BAGAGE HORS FORMAT » explicite aurait affiché
+      « (+0 hors format) » au lieu d'être supprimé — `Number(...) > 0`
+      plutôt qu'un simple test de vérité sur la chaîne.
+    - **`markNoShow` laissait des bannières de note périmées** (`src/core/
+      mission.js`) : `greetSign`/`bagExpected`/`bagHorsFormatExpected`/
+      `porterNote` n'étaient pas vidés par `markNoShow`, donc une mission
+      passée en NO SHOW continuait d'afficher « Bagages prévus : 12 » et
+      la note du porteur alors que pax/bagages/lieux affichaient déjà tous
+      N/A — trompeur pour un client qui ne s'est jamais présenté. Fix : les
+      quatre champs sont désormais remis à `''` par `markNoShow` (pas de
+      valeur `'N/A'` : ce sont des repères d'affichage, pas des champs de
+      formulaire avec un état N/A).
+    - **`porterPaidBagsNote` perdait la note faute de parenthèse fermante**
+      (`src/config/nce-wellcom.js`) : le premier correctif tenté (borner par
+      `\n` en l'absence de `)`) a cassé la régression réelle — la note peut
+      elle-même être coupée sur deux lignes PDF (« ...si supp\nbags = a
+      régler... », cas réel de `planning-04-hors-format-note.pdf`), donc
+      borner par le premier `\n` tronquait la capture AVANT la parenthèse
+      fermante réelle (détecté immédiatement par `npm test`, qui a régressé
+      sur `planning-04-hors-format-note.pdf`). Fix définitif :
+      `[\s\S]*?(?:\)|(?=greet\s*sign|={5,}))` — capture non gloutonne
+      bornée par la première occurrence de `)` OU du libellé `Greet Sign`/
+      séparateur `====`, jamais par un simple saut de ligne. Couvre aussi le
+      second risque signalé (une parenthèse lointaine après Greet Sign, ex.
+      contenu Type-column « Arrivée (jusqu'à 4 bagages inclus) », ne doit
+      jamais être atteinte). Trois tests unitaires ajoutés sur
+      `parseNoteBlock` directement (coupure de ligne, absence de
+      parenthèse, parenthèse lointaine) — la régression du premier essai
+      aurait été invisible sans le test de coupure de ligne, qui reproduit
+      exactement le fixture réel.
+    - **Débordement de colonne : mot compté deux fois (note ET Type) +
+      logique dupliquée** (`src/core/parser-pdf.js`) : le premier jet du
+      point 35 collectait `vn` via un filtre `words` séparé (`isNoteCol`)
+      pendant que `cells[]` (qui alimente `row.c6`, utilisé pour la
+      détection ARR/DEP) restait peuplé par `colOf()` strict — un mot dans
+      la marge de débordement se retrouvait donc à la fois dans le texte
+      note ET dans `cells[6]`, cassant l'invariant « un mot = une colonne »
+      sans bénéfice (règression latente pour un futur mot de débordement
+      qui matcherait par coïncidence `/Arriv/i`/`/D.?part/i`). Fix :
+      nouvelle fonction `effectiveColOf()` (classement mutuellement
+      exclusif — un mot en marge de débordement rejoint la dernière colonne
+      note plutôt que Type) utilisée pour peupler `cells[]` ; `vn` redevient
+      un simple `lineize` des buckets `cells[4]+cells[5]` (comme avant le
+      point 35), supprimant le filtre dupliqué. `detectPorterLines` (qui
+      sert à localiser les NOMS de porteur, pas le texte du bloc services)
+      avait aussi été élargie par erreur au point 35 avec la même marge de
+      débordement — repli intentionnel vers `colOf()` strict : un nom de
+      porteur n'a jamais été observé en débordement (seuls Greet Sign/note
+      libre le sont), et l'élargir risquait d'agglomérer un mot Type voisin
+      sur la même ligne qu'un nom, cassant le match exact de `NAME_RE` et
+      faisant potentiellement chuter `ranked` pour toute la page — un coût
+      largement supérieur au bénéfice pour une fonction que le bug ne
+      concernait pas.
+    - **Marge de débordement non proportionnelle à la géométrie** (même
+      fichier) : `noteOverflowMargin` est un pixel absolu mesuré sur NCE/
+      Well'Com Air (25px). Sur un futur site à colonnes plus resserrées, la
+      même valeur pourrait dépasser jusqu'au centre de la colonne Type.
+      Filet de sécurité ajouté (sans changer le comportement sur la
+      géométrie actuelle) : la marge effective est plafonnée au tiers de
+      l'écart entre les deux centres de colonnes.
+    - **Non retenu** : la suggestion de dériver `noteOverflowMargin`
+      entièrement de la géométrie détectée (proportion pure plutôt que
+      pixel absolu + plafond) — changement plus large, non justifié par un
+      bug observé, cohérent avec d'autres constantes en pixels/caractères
+      déjà présentes dans ce fichier (fenêtre `BOOKING_REF_RE` à 200/2500
+      caractères, marge de 4px dans `lineize`) ; le plafond proportionnel
+      suffit comme garde-fou.
+    - **Validation** : 4 nouveaux tests unitaires (markNoShow vide les
+      repères de note ; 3 sur `parseNoteBlock`/`porterPaidBagsNote`) +
+      vérification manuelle en Node des 6 branches de `bagExpectedText`
+      (non testable via `npm test` : `src/ui/app.js` touche le DOM au
+      chargement du module, pas importable tel quel dans le runner de test
+      Node — voir §2). `npm test` : 35/35, aucune régression sur les
+      fixtures existantes (dont `planning-04-hors-format-note.pdf`, qui a
+      immédiatement détecté la régression du premier correctif de
+      `porterPaidBagsNote`).
 
 ---
 

@@ -79,6 +79,15 @@ function colOf(x, centers) {
  * donc le débordement sans jamais capturer de contenu Type. Cible uniquement
  * la frontière avec la colonne qui suit la dernière colonne note ; les autres
  * frontières (ex. Itinéraire/Véhicule) restent strictes.
+ *
+ * `cfg.pdfTable.noteOverflowMargin` est un pixel absolu mesuré sur NCE/
+ * Well'Com Air, pas une proportion — sur un futur site à la géométrie plus
+ * resserrée (colonnes note/type plus rapprochées), la même valeur pourrait
+ * dépasser jusqu'au centre de la colonne Type elle-même. Filet de sécurité :
+ * la marge effective est plafonnée au tiers de l'écart entre les deux
+ * centres, pour ne jamais s'approcher du centre de la colonne suivante quelle
+ * que soit la config du site — sans effet sur la géométrie NCE actuelle (25
+ * est très en-deçà du tiers de l'écart mesuré, ~93/3≈31).
  */
 function isNoteCol(x, centers, noteCols, overflowMargin) {
   if (noteCols.indexOf(colOf(x, centers)) >= 0) return true;
@@ -86,7 +95,22 @@ function isNoteCol(x, centers, noteCols, overflowMargin) {
   const nextCol = lastNote + 1;
   if (!overflowMargin || nextCol >= centers.length) return false;
   const boundary = (centers[lastNote] + centers[nextCol]) / 2;
-  return x >= boundary && x < boundary + overflowMargin;
+  const margin = Math.min(overflowMargin, (centers[nextCol] - centers[lastNote]) / 3);
+  return x >= boundary && x < boundary + margin;
+}
+
+/**
+ * Classement de colonne effectif : comme `colOf()`, mais un mot dans la
+ * marge de débordement note→type (voir `isNoteCol`) est reclassé vers la
+ * dernière colonne note plutôt que la colonne Type. Rend le classement
+ * mutuellement exclusif — un mot n'appartient plus jamais à deux colonnes à
+ * la fois (sans ça, un mot débordant restait aussi compté dans `cells[6]`,
+ * utilisé pour la détection ARR/DEP via `row.c6`).
+ */
+function effectiveColOf(x, centers, noteCols, overflowMargin) {
+  const c = colOf(x, centers);
+  if (noteCols.indexOf(c) >= 0) return c;
+  return isNoteCol(x, centers, noteCols, overflowMargin) ? Math.max(...noteCols) : c;
 }
 
 function joinCol(cells, c) {
@@ -229,10 +253,18 @@ function lieuFor(type, itin, cfg) {
   return type === 'ARR' ? cfg.places.arrDropFallback : cfg.places.depDropFallback;
 }
 
-function detectPorterLines(words, centers, noteCols, overflowMargin) {
+// Classement strict (jamais `isNoteCol`/marge de débordement) : la marge de
+// débordement existe pour récupérer le dernier mot d'un Greet Sign/note
+// libre trop long, jamais observée sur un nom de porteur. L'élargir ici
+// risquerait d'agglomérer un mot Type voisin sur la même ligne qu'un nom et
+// de casser `NAME_RE` (match exact), qui peut faire chuter `ranked` pour
+// toute la page — un risque plus coûteux que le gain, qui ne concerne pas
+// cette fonction.
+function detectPorterLines(words, centers, noteCols) {
   const toks = [];
   for (const w of words) {
-    if (isNoteCol(w.x, centers, noteCols, overflowMargin)) toks.push(w);
+    const c = colOf(w.x, centers);
+    if (noteCols.indexOf(c) >= 0) toks.push(w);
   }
   toks.sort((a, b) => a.y - b.y || a.x - b.x);
   const lines = [];
@@ -274,7 +306,7 @@ function reconstructPage(words, cfg) {
   for (let k = 1; k < anchors.length; k++) bounds.push((anchors[k - 1].y + anchors[k].y) / 2);
   bounds.push(Infinity);
 
-  const porterLines = detectPorterLines(words, centers, noteCols, overflowMargin);
+  const porterLines = detectPorterLines(words, centers, noteCols);
   const ranked = porterLines.length === anchors.length;
 
   const rows = [];
@@ -283,10 +315,12 @@ function reconstructPage(words, cfg) {
     const bot = bounds[a + 1];
     const cells = Array.from({ length: cfg.pdfTable.columnCount }, () => []);
     for (const w of words) {
-      if (w.y >= top && w.y < bot) cells[colOf(w.x, centers)].push(w);
+      // `effectiveColOf` (pas `colOf`) : un mot dans la marge de débordement
+      // note→type rejoint la dernière colonne note plutôt que `cells[6]`
+      // (Type), pour ne jamais être compté deux fois (note ET c6/type).
+      if (w.y >= top && w.y < bot) cells[effectiveColOf(w.x, centers, noteCols, overflowMargin)].push(w);
     }
-    const vnToks = words.filter((w) => w.y >= top && w.y < bot && isNoteCol(w.x, centers, noteCols, overflowMargin));
-    const vn = lineize(vnToks);
+    const vn = lineize(noteCols.reduce((acc, c) => acc.concat(cells[c]), []));
 
     // Bloc « services » (voir noteBlock.js) : peut être bien plus haut que la
     // note greeter classique et déborder la bande anchor-midpoint sur la
