@@ -161,6 +161,16 @@ absorbe les petites variations de mise en page entre PDF.
   d'une marge fixe (`cfg.pdfTable.noteOverflowMargin`), mesurée pour
   laisser une marge de sécurité par rapport au contenu Type légitime le
   plus proche — jamais appliquée aux autres frontières de colonnes.
+  **Débordement Itinéraire→Véhicule** (CLAUDE.md racine §5 point 37) :
+  frontière voisine (3↔4 cette fois, pas 5↔6), dans l'AUTRE sens que le
+  point 2 (« NCE » qui dérive de Véhicule vers Itinéraire) — ici c'est un
+  fragment d'Itinéraire (le code de vol et la virgule d'un « N° Vol XXXX , »
+  coupé en plein milieu par `colOf()`) qui déborde vers Véhicule, et comme
+  cette colonne est fusionnée à la fois dans `itin` (3+4) et dans le texte
+  note (4+5), le fragment pollue aussi `noteBlockText`. Fix :
+  `stripLeakedFlightCode(text, vol)`, appliqué dans `rowToFields` avec le
+  code de vol déjà calculé pour cette ligne (marqueur fiable et propre à
+  chaque mission, contrairement à un token constant comme « NCE »).
 
 **Validation empirique** : testé sur 4 plannings réels distincts
 (19/06, 20/06 x2, 21/06), **toujours 100 % des missions exactes** sur
@@ -284,7 +294,11 @@ PDF source) :
   Bassam Omar ») qui valident le fix de débordement de colonne X (le
   dernier mot d'un texte note assez long peut dépasser la frontière
   col5/col6 et être exclu à tort par `colOf()` strict — voir CLAUDE.md
-  racine §5 point 35, `isNoteCol`/`noteOverflowMargin`). **Fixture de
+  racine §5 point 35, `isNoteCol`/`noteOverflowMargin`). Contient aussi une
+  mission (Bastien D, page 5) avec un itinéraire deux-étapes dont le code de
+  vol déborde la frontière col3/col4 vers la colonne Véhicule et se
+  retrouvait intercalé dans le texte note, cassant `bagHorsFormat` — valide
+  `stripLeakedFlightCode` (voir CLAUDE.md racine §5 point 37). **Fixture de
   test.**
 
 **Protocole minimal avant de livrer un changement touchant

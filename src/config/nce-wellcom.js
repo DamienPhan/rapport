@@ -141,11 +141,32 @@ export const siteConfig = {
    */
   places: {
     ARR: { meet: 'Tapis bagage', drop: 'Parking pro' },
-    DEP: { meet: 'Dépose minute', drop: 'AUTO_CHECKIN' },
+    DEP: { meet: 'Linéaire Professionnel', drop: 'AUTO_CHECKIN' },
     TRS: { meet: '', drop: '' },
     /** Repli au niveau du parser PDF (avant application des défauts UI). */
     arrDropFallback: 'Tapis bagage',
     depDropFallback: 'AUTO_CHECKIN',
+  },
+
+  /**
+   * Options affichées dans les <select> lieu de rencontre/dépose,
+   * restreintes par type de mission (ARR/DEP) — décision explicite de
+   * Damien : les lieux réellement possibles diffèrent selon le sens de la
+   * mission (ex. « Linéaire Professionnel » n'a de sens qu'au départ,
+   * « Tapis bagage » qu'à l'arrivée). Chaque liste inclut 'N/A' (utilisé par
+   * NO SHOW) et 'Autre' (champ libre). TRS et « Service » (extraction sans
+   * vol) n'ont pas de liste dédiée — l'UI (`src/ui/app.js`) leur affiche
+   * l'union de toutes les valeurs ci-dessous plutôt qu'une liste vide.
+   */
+  placeOptions: {
+    ARR: {
+      meet: ['Tapis bagage', 'Hélicoptères', 'Terminal affaires', 'Autre', 'N/A'],
+      drop: ['Dépose minute', 'Parking pro', 'Parking public', 'Gare routière', 'Loueurs', 'Taxis', 'Hélicoptères', 'Terminal affaires', 'Autre', 'N/A'],
+    },
+    DEP: {
+      meet: ['Dépose minute', 'Linéaire Professionnel', 'Loueurs', 'Gare routière (BUS)', 'Terminal affaires', 'Parking public', 'Autre', 'N/A'],
+      drop: ['AUTO_CHECKIN', 'Hélicoptères', 'Terminal affaires', 'Loueurs', 'Autre', 'N/A'],
+    },
   },
 
   /** Téléphone : doit commencer par + ou 0, longueur minimale. */

@@ -4,14 +4,19 @@
  */
 
 /**
- * Résout un lieu : si 'Autre', utilise le champ libre ; si 'AUTO_CHECKIN',
- * compose « Check-in + n° de vol ».
+ * Résout un lieu : si 'Autre', utilise le champ libre ; si 'Parking public',
+ * complète avec le nom du parking donné (même champ libre que 'Autre', voir
+ * `src/ui/app.js`) ; si 'AUTO_CHECKIN', compose « Check-in + n° de vol ».
  * @param {object} m mission
  * @param {'lieuRencontre'|'lieuDepose'} field
  */
 export function resolvePlace(m, field) {
   const v = m[field];
   if (v === 'Autre') return m[field + 'Autre'] || 'Autre';
+  if (v === 'Parking public') {
+    const name = m[field + 'Autre'];
+    return name ? `Parking public : ${name}` : 'Parking public';
+  }
   if (v === 'AUTO_CHECKIN') return m.vol ? `Check-in vol ${m.vol}` : 'Check-in';
   return v || '';
 }
