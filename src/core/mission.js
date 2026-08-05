@@ -35,7 +35,7 @@ export function fmtTime(mins) {
 export function createMission() {
   return {
     booking: '', date: todayStr(), vol: '', terminal: '', type: 'DEP',
-    client: '', clientPhone: '', greeteur: '', greeteurPhone: '', contactPhone: '', pax: '',
+    client: '', clientPhone: '', greeteur: '', greeteurPhone: '', contactPhone: '', greetSign: '', pax: '',
     prebooking: 'PRÉ-BOOKING',
     detaxe: 'Non',
     lieuRencontre: 'Dépose minute',

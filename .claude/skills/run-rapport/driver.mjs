@@ -96,6 +96,15 @@ const COMMANDS = {
     console.log('select', sel, '=', JSON.stringify(value));
   },
 
+  // Sets a file <input>'s files directly (Playwright API — no OS file
+  // picker involved). Fires the input's `change` listener, same as a real
+  // user pick. Path is resolved relative to the process cwd (repo root).
+  async upload(args) {
+    const [sel, filePath] = splitArg(args);
+    await page.setInputFiles(sel, path.resolve(filePath));
+    console.log('upload', sel, '<-', filePath);
+  },
+
   async wait(sel) {
     try {
       await page.waitForSelector(sel, { timeout: 10_000 });

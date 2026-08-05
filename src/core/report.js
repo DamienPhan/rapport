@@ -37,6 +37,8 @@ export function generateReportText(m) {
   // Greeteur reste optionnel : simplement omis quand vide, jamais 'N/A'.
   const clientLine = m.greeteur ? `${naIfEmpty(m.client)} - Greeteur : ${m.greeteur}` : naIfEmpty(m.client);
   const bookingDisp = String(m.booking ?? '').trim() ? `#${m.booking}` : 'N/A';
+  // Panneau d'accueil : optionnel comme le greeteur, simplement omis quand vide.
+  const greetSignLine = m.greetSign ? `\nPanneau d'accueil : ${m.greetSign}` : '';
 
   return `**TOTAL BAGAGES PRIS EN CHARGE : ${total}**
 
@@ -45,7 +47,7 @@ export function generateReportText(m) {
 1. Informations générales
 Booking : ${bookingDisp}
 Date : ${naIfEmpty(m.date)}
-Client : ${clientLine}
+Client : ${clientLine}${greetSignLine}
 Pré-booking ou Live : ${naIfEmpty(m.prebooking)}
 Type de service : ${naIfEmpty(m.type)}
 Vol - code IATA : ${naIfEmpty(m.vol)}

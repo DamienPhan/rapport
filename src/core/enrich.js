@@ -9,9 +9,33 @@
  * la bande Y de sa mission dans le chemin par coordonnées).
  */
 import { normalizePhone } from './phone.js';
+import { parseNoteBlock, applyNoteBlock } from './noteBlock.js';
 
 /** Réf booking générique (`nnnnn-n`), utilisée pour borner les fenêtres de recherche ci-dessous. */
 const BOOKING_REF_RE = /\b\d{4,6}-\d+\b/;
+
+/**
+ * Fenêtre de texte propre à une mission : de sa réf booking à la réf
+ * booking suivante (jamais au-delà, pour ne pas déborder sur la mission
+ * voisine — même principe que `contactPhone` ci-dessous). Une réf trouvée
+ * à <150 caractères est la réf de planification agence de la mission
+ * elle-même, pas un voisin — on saute au suivant.
+ * @returns {string} la tranche de texte, ou '' si la réf booking est introuvable
+ */
+function missionWindow(fullText, booking) {
+  const bk = booking || '';
+  const idx = bk ? fullText.indexOf(bk) : -1;
+  if (idx < 0) return '';
+  const after = fullText.slice(idx + bk.length);
+  let nb = after.match(BOOKING_REF_RE);
+  if (nb && nb.index < 150) {
+    const after2 = after.slice(nb.index + nb[0].length);
+    const nb2 = after2.match(BOOKING_REF_RE);
+    nb = nb2 ? { index: nb.index + nb[0].length + nb2.index } : null;
+  }
+  const end = nb ? idx + bk.length + nb.index : Math.min(idx + 2500, fullText.length);
+  return fullText.slice(idx, end);
+}
 
 /**
  * @param {object[]} missions
@@ -62,5 +86,32 @@ export function enrichWithPhones(missions, fullText, cfg) {
         if (r) m.contactPhone = normalizePhone(r[1], cfg.phone);
       }
     }
+  });
+}
+
+/**
+ * Renseigne, depuis le bloc « services » généré par le système de booking
+ * (voir `noteBlock.js` pour le détail du bloc et des champs), `greetSign`,
+ * `bagStandard`, `detaxe` et `lieuRencontre`/`lieuDepose`.
+ *
+ * **Repli texte uniquement** : le chemin PDF par coordonnées
+ * (`parser-pdf.js`/`rowToFields`) applique déjà ce même bloc de façon fiable
+ * (texte de colonne borné par bande Y, une mission = une bande). Cette
+ * fonction sert au chemin copier-coller (aucune coordonnée disponible) — le
+ * texte aplati est fenêtré par réf booking (`missionWindow`), qui peut
+ * entrelacer deux missions voisines quand une note est inhabituellement
+ * haute (plusieurs lignes de service empilées) ; `onlyIfEmpty` protège donc
+ * chaque champ pour ne jamais écraser une valeur déjà posée par un appel
+ * antérieur plus fiable (ne devrait de toute façon jamais être appelée après
+ * le chemin coordonnées, voir `src/ui/app.js`).
+ * @param {object[]} missions
+ * @param {string} fullText  texte brut complet du planning (collé, ou PDF aplati en repli)
+ * @param {import('../config/nce-wellcom.js').SiteConfig} cfg
+ */
+export function enrichWithNotes(missions, fullText, cfg) {
+  missions.forEach((m) => {
+    const win = missionWindow(fullText, m.booking);
+    if (!win) return;
+    applyNoteBlock(m, parseNoteBlock(win, cfg), { onlyIfEmpty: true });
   });
 }

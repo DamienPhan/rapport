@@ -6,6 +6,7 @@
  * `config` (siteConfig) passé en paramètre — aucun littéral propre à NCE ici.
  */
 import { normalizePhone, extractClientPhone } from './phone.js';
+import { parseNoteBlock } from './noteBlock.js';
 
 const NAME_RE = /^([A-ZÉÈ][a-zà-ÿ]+(?:-[A-ZÉÈ][a-zà-ÿ]+)?\s+[A-ZÉÈ]\.?|[A-ZÉÈ][a-zà-ÿ]+\s+[A-Z]{2,})$/;
 const NAME_BLOCK_RE = /^(Flight|Greete?r|Note|Phone|Aviation|Class|Contact|Tablette|Powered)/i;
@@ -148,9 +149,20 @@ function greeterInfoFromLines(lines, porter, cfg) {
   return { name: '', phone: '' };
 }
 
-function flightFromItinerary(itinRaw, cfg) {
+/**
+ * Retire le token isolé du code aéroport (« NCE »), bruit de la colonne
+ * Véhicule qui s'intercale parfois entre deux mots d'une colonne fusionnée
+ * avec elle (Itinéraire = col3+4, ou la colonne Note = col4+5 pour le bloc
+ * services, voir `reconstructPage`) — sinon `Terminal NCE 1` casse le
+ * terminal, ou `BAGAGE\nNCE SUPPLÉMENTAIRE` casse `bagSupplementaire`.
+ */
+function stripSiteCode(text, cfg) {
   const code = cfg.site.airportCode;
-  const itin = itinRaw.replace(new RegExp('(^|\\s)' + code + '(?=\\s|$)', 'g'), ' ');
+  return text.replace(new RegExp('(^|\\s)' + code + '(?=\\s|$)', 'g'), ' ');
+}
+
+function flightFromItinerary(itinRaw, cfg) {
+  const itin = stripSiteCode(itinRaw, cfg);
   const m = itin.match(cfg.itinerary.flightPattern);
   if (!m) return { vol: '', terminal: '' };
   const vol = m[1].replace(/\s+/g, '').toUpperCase();
@@ -252,6 +264,32 @@ function reconstructPage(words, cfg) {
       if (w.y >= top && w.y < bot) cells[colOf(w.x, centers)].push(w);
     }
     const vn = lineize(noteCols.reduce((acc, c) => acc.concat(cells[c]), []));
+
+    // Bloc « services » (voir noteBlock.js) : peut être bien plus haut que la
+    // note greeter classique et déborder la bande anchor-midpoint sur la
+    // mission PRÉCÉDENTE (l'ancre suivante n'est pas forcément alignée avec
+    // le haut de son propre bloc note quand celui-ci est très grand — cas
+    // réel : « Greet Sign: Kristi » d'une mission attribué à tort à la
+    // mission juste avant elle). Quand le rang porteur↔ancre est fiable
+    // (`ranked`), ce texte est borné par les lignes de porteur détectées
+    // (déjà validées pour l'attribution du porteur lui-même, voir CLAUDE.md
+    // racine §5 point 3) plutôt que par les ancres — n'affecte QUE cette
+    // extraction, jamais `vn` (greeter/porteur, laissé intact).
+    let noteBlockText = vn.join('\n');
+    if (ranked) {
+      const nTop = porterLines[a].y;
+      const nBot = a + 1 < porterLines.length ? porterLines[a + 1].y : Infinity;
+      const svcToks = words.filter(
+        (w) => w.y >= nTop && w.y < nBot && noteCols.indexOf(colOf(w.x, centers)) >= 0
+      );
+      noteBlockText = lineize(svcToks).join('\n');
+    }
+    // noteCols fusionne Véhicule+Note (voir cfg.pdfTable.noteColumns) : le
+    // token isolé « NCE » de la colonne Véhicule peut s'intercaler entre deux
+    // mots du bloc services et casser un motif à cheval sur deux lignes
+    // (ex. « N x BAGAGE\nNCE SUPPLÉMENTAIRE »).
+    noteBlockText = stripSiteCode(noteBlockText, cfg);
+
     rows.push({
       ref: anchors[a].ref,
       c0: joinCol(cells, bookingCol),
@@ -260,6 +298,7 @@ function reconstructPage(words, cfg) {
       itin: joinCols(cells, [3, 4]),
       c6: joinCol(cells, 6),
       vn,
+      noteBlockText,
       porter: ranked ? porterLines[a].name : porterFromLines(vn),
       ranked,
       anchorY: anchors[a].y,
@@ -293,6 +332,15 @@ function rowToFields(row, cfg) {
 
   const isService = !fl.vol && /\bService\b/i.test(row.c6 + ' ' + row.itin);
   const greeterInfo = greeterInfoFromLines(row.vn, row.porter, cfg);
+  // Bloc « services » (missions agence, voir noteBlock.js) : lu depuis
+  // `row.noteBlockText`, borné par coordonnées de façon fiable même sur une
+  // note très haute (voir `reconstructPage`) — contrairement à
+  // `enrichWithNotes` (repli texte aplati, utilisé seulement pour le chemin
+  // copier-coller). Exposé tel quel (`noteBlock`) plutôt qu'appliqué ici :
+  // l'appelant (`missionFromRow` dans src/ui/app.js) doit l'appliquer APRÈS
+  // `applyPlaceDefaults`, qui écrase sinon inconditionnellement
+  // lieuRencontre/lieuDepose selon le type.
+  const noteBlock = parseNoteBlock(row.noteBlockText, cfg);
 
   return {
     booking,
@@ -312,6 +360,7 @@ function rowToFields(row, cfg) {
     srcPos: row.anchorY,
     bookingOptions: [],
     flightOptions: [],
+    noteBlock,
   };
 }
 
