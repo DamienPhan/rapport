@@ -207,6 +207,34 @@ function stripSiteCode(text, cfg) {
   return text.replace(new RegExp('(^|\\s)' + code + '(?=\\s|$)', 'g'), ' ');
 }
 
+/**
+ * Débordement Itinéraire→Véhicule (cousin du bruit « NCE » ci-dessus, sur
+ * une autre frontière) : sur une mission avec un itinéraire à deux étapes
+ * horodatées (dépose puis parking, ex. « 18:25 - ... , N° Vol TK1815 , ...
+ * \n21:25 - Parking Pro »), la phrase « N° Vol XXXX , » peut être coupée EN
+ * PLEIN MILIEU par `colOf()` à midpoint : le code de vol (et la virgule qui
+ * suit) retombe côté colonne Véhicule (4) alors que « N° » et « Vol »
+ * restent côté Itinéraire (3). Comme la colonne 4 est fusionnée à la fois
+ * dans `itin` (cols 3+4, voulu — voir historique point 2) ET dans le texte
+ * note (cols 4+5, `noteColumns`), ce fragment se retrouve donc AUSSI dans
+ * `noteBlockText` — cas réel : « TK1815 , » intercalé entre "HORS" et
+ * "FORMAT" sur `planning-04-hors-format-note.pdf` (Bastien D, 04/08),
+ * cassant `bagHorsFormat`. Le code de vol de la ligne (déjà calculé,
+ * `fl.vol`) est un marqueur fiable de ce débordement : le vocabulaire du
+ * bloc note/services (Greet Sign/Flight Class/bagages/parking/détaxe) n'en
+ * contient jamais et n'utilise d'ailleurs aucune virgule — les deux sont
+ * donc retirés sans risque de perdre du contenu légitime.
+ */
+function stripLeakedFlightCode(text, vol) {
+  if (!text) return text;
+  let out = text;
+  if (vol) {
+    const esc = vol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp('(^|\\s)' + esc + '(?=\\s|$)', 'gi'), ' ');
+  }
+  return out.replace(/(^|\s),(?=\s|$)/g, ' ');
+}
+
 function flightFromItinerary(itinRaw, cfg) {
   const itin = stripSiteCode(itinRaw, cfg);
   const m = itin.match(cfg.itinerary.flightPattern);
@@ -397,7 +425,7 @@ function rowToFields(row, cfg) {
   // l'appelant (`missionFromRow` dans src/ui/app.js) doit l'appliquer APRÈS
   // `applyPlaceDefaults`, qui écrase sinon inconditionnellement
   // lieuRencontre/lieuDepose selon le type.
-  const noteBlock = parseNoteBlock(row.noteBlockText, cfg);
+  const noteBlock = parseNoteBlock(stripLeakedFlightCode(row.noteBlockText, fl.vol), cfg);
 
   return {
     booking,

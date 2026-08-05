@@ -16,7 +16,7 @@ import assert from 'node:assert';
 import { siteConfig } from '../src/config/nce-wellcom.js';
 import { wordsFromTextContent, missionsForPorter } from '../src/core/parser-pdf.js';
 import { createMission, applyPlaceDefaults, validateMission, markNoShow } from '../src/core/mission.js';
-import { generateReportText } from '../src/core/report.js';
+import { generateReportText, resolvePlace } from '../src/core/report.js';
 import { normalizePhone, extractClientPhone } from '../src/core/phone.js';
 import { enrichWithPhones, enrichWithNotes } from '../src/core/enrich.js';
 import { parseNoteBlock, applyNoteBlock } from '../src/core/noteBlock.js';
@@ -96,7 +96,7 @@ test('createMission ne fait jamais hériter aucun champ d\'une mission précéde
   assert.strictEqual(m2.bagHorsFormat, '0');
   assert.strictEqual(m2.bagCage, '0');
   assert.strictEqual(m2.detaxe, 'Non');
-  assert.strictEqual(m2.lieuRencontre, 'Dépose minute');
+  assert.strictEqual(m2.lieuRencontre, 'Linéaire Professionnel');
   assert.strictEqual(m2.lieuRencontreAutre, '');
   assert.strictEqual(m2.lieuDepose, 'AUTO_CHECKIN');
   assert.strictEqual(m2.lieuDeposeAutre, '');
@@ -110,6 +110,11 @@ test('applyPlaceDefaults applique la table de config', () => {
   applyPlaceDefaults(m, siteConfig.places);
   assert.strictEqual(m.lieuRencontre, 'Tapis bagage');
   assert.strictEqual(m.lieuDepose, 'Parking pro');
+
+  const dep = createMission(); dep.type = 'DEP';
+  applyPlaceDefaults(dep, siteConfig.places);
+  assert.strictEqual(dep.lieuRencontre, 'Linéaire Professionnel');
+  assert.strictEqual(dep.lieuDepose, 'AUTO_CHECKIN');
 });
 
 test('generateReportText affiche N/A pour hors-format/cage vides', () => {
@@ -139,6 +144,14 @@ test('generateReportText omet le greeteur (optionnel) sans afficher N/A', () => 
   Object.assign(m, { booking: 'B', date: '30/06', client: 'C', vol: 'V', terminal: '1', type: 'ARR', pax: '1', greeteur: '' });
   const txt = generateReportText(m);
   assert.ok(!txt.includes('Greeteur'));
+});
+
+test('resolvePlace complète "Parking public" avec le nom donné, comme "Autre"', () => {
+  const withName = { lieuDepose: 'Parking public', lieuDeposeAutre: 'Parking Azur' };
+  assert.strictEqual(resolvePlace(withName, 'lieuDepose'), 'Parking public : Parking Azur');
+
+  const withoutName = { lieuDepose: 'Parking public', lieuDeposeAutre: '' };
+  assert.strictEqual(resolvePlace(withoutName, 'lieuDepose'), 'Parking public');
 });
 
 test('enrichWithPhones trouve le téléphone du greeter sans ":" (« Greeter NOM »)', () => {
@@ -324,7 +337,13 @@ test('enrichWithNotes affine le lieu réel (Parking pro/public, Dépose-minute) 
   const missions = [
     { booking: '11878-1', type: 'ARR', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
     { booking: '11855-1', type: 'ARR', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
-    { booking: '11894-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
+    // 'Linéaire Professionnel' : défaut réel DEP (cfg.places.DEP.meet), pas
+    // 'Dépose minute' — c'est ce que produirait `applyPlaceDefaults` avant
+    // `enrichWithNotes` sur une vraie mission DEP, et c'est nécessaire pour
+    // exercer réellement le guard `onlyIfEmpty` d'`applyNoteBlock` (sinon le
+    // test passe même si l'assignation ne s'exécute jamais, faute de mieux
+    // distinguer « valeur écrasée » de « valeur jamais touchée »).
+    { booking: '11894-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Linéaire Professionnel', lieuDepose: 'AUTO_CHECKIN' },
   ];
   const fullText = `
 11878-1
@@ -386,6 +405,7 @@ const fixtures = [
   { file: 'planning-25-services-block.pdf', porter: 'François L.', expect: { hasVol: 'AC0815', booking: '31106' } },
   { file: 'planning-04-hors-format-note.pdf', porter: 'Stéphane M.', expect: { hasVol: 'AF7314', booking: '2026-002605' } },
   { file: 'planning-04-hors-format-note.pdf', porter: 'Thomas C.', expect: { hasVol: 'AZ354', booking: '2026-002628' } },
+  { file: 'planning-04-hors-format-note.pdf', porter: 'Bastien D', expect: { hasVol: 'TK1815', booking: '2026-002596' } },
 ];
 
 async function runPdfTests() {
@@ -421,7 +441,7 @@ async function runPdfTests() {
       const m = createMission();
       Object.assign(m, r);
       applyPlaceDefaults(m, siteConfig.places);
-      if (r.noteBlock) applyNoteBlock(m, r.noteBlock, { onlyIfEmpty: false });
+      if (r.noteBlock) applyNoteBlock(m, r.noteBlock, siteConfig, { onlyIfEmpty: false });
       delete m.noteBlock;
       return m;
     });
@@ -491,6 +511,23 @@ async function runPdfTests() {
         assert.strictEqual(m.greetSign, 'Salame prince Bassam Omar');
         assert.strictEqual(m.bagExpected, '4');
         assert.strictEqual(m.bagHorsFormatExpected, '');
+      });
+    }
+    if (fx.file === 'planning-04-hors-format-note.pdf' && fx.porter === 'Bastien D') {
+      test(`${fx.file} / ${fx.porter} : bagage hors format non perdu par débordement Itinéraire→Véhicule`, () => {
+        // Régression réelle (signalée par l'utilisateur) : sur cette mission
+        // à itinéraire deux-étapes ("18:25 - ... N° Vol TK1815 , ...\n21:25 -
+        // Parking Pro"), le code de vol et la virgule qui suit "N° Vol"
+        // retombent côté colonne Véhicule (colOf() coupe la phrase en plein
+        // milieu) et se retrouvaient intercalés dans noteBlockText entre
+        // "HORS" et "FORMAT", cassant bagHorsFormat (voir CLAUDE.md racine
+        // §5, stripLeakedFlightCode dans parser-pdf.js).
+        const m = missions.find((x) => x.vol === 'TK1815');
+        assert.ok(m, 'mission TK1815 introuvable');
+        assert.strictEqual(m.greetSign, 'ZAIDAN');
+        assert.strictEqual(m.bagExpected, '12'); // 4 inclus + 8 supplémentaires
+        assert.strictEqual(m.bagHorsFormatExpected, '1'); // avant fix : '' (perdu)
+        assert.strictEqual(m.lieuDepose, 'Parking pro');
       });
     }
   }

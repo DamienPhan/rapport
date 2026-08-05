@@ -38,7 +38,7 @@ export function createMission() {
     client: '', clientPhone: '', greeteur: '', greeteurPhone: '', contactPhone: '', greetSign: '', porterNote: '', pax: '',
     prebooking: 'PRÉ-BOOKING',
     detaxe: 'Non',
-    lieuRencontre: 'Dépose minute',
+    lieuRencontre: 'Linéaire Professionnel',
     lieuRencontreAutre: '',
     lieuDepose: 'AUTO_CHECKIN',
     lieuDeposeAutre: '',

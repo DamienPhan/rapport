@@ -14,7 +14,7 @@ import { wordsFromTextContent, missionsForPorter } from '../core/parser-pdf.js';
 import { extractMissions } from '../core/parser-text.js';
 import { enrichWithPhones, enrichWithNotes } from '../core/enrich.js';
 import { applyNoteBlock } from '../core/noteBlock.js';
-import { generateReportText, resolvePlace } from '../core/report.js';
+import { generateReportText } from '../core/report.js';
 import { createSessionStore } from '../store/session.js';
 import { t as translate, optionLabel, getLang, setLang, otherLang } from '../i18n/lang.js';
 
@@ -42,6 +42,47 @@ function toggleLang(){
   applyStaticTranslations();
   refreshRosterUI();
   render();
+}
+
+// Options de lieu rencontre/dépose restreintes par type (voir
+// cfg.placeOptions, CLAUDE.md racine). TRS/Service (extraction sans vol)
+// n'ont pas de liste dédiée — union de toutes les valeurs ARR/DEP plutôt
+// qu'une liste vide, pour ne jamais rendre un lieu déjà choisi inaccessible.
+const ALL_PLACE_VALUES = (() => {
+  const seen = new Set();
+  const out = [];
+  for (const type of ['ARR', 'DEP']) {
+    for (const slot of ['meet', 'drop']) {
+      for (const v of (CFG.placeOptions[type]?.[slot] || [])) {
+        if (!seen.has(v)) { seen.add(v); out.push(v); }
+      }
+    }
+  }
+  return out;
+})();
+
+function placeOptionsFor(type, slot){
+  return CFG.placeOptions[type]?.[slot] || ALL_PLACE_VALUES;
+}
+
+function placeOptionHtml(value, selectedValue, vol){
+  const label = value === 'AUTO_CHECKIN' ? t('field.autoCheckin', { vol }) : opt('places', value);
+  return `<option value="${value}" ${value===selectedValue?'selected':''}>${label}</option>`;
+}
+
+function placeOptionsHtml(type, slot, selectedValue, vol){
+  return placeOptionsFor(type, slot).map((v) => placeOptionHtml(v, selectedValue, vol)).join('');
+}
+
+// 'Parking public' réutilise le même champ libre que 'Autre' (nom du
+// parking à donner plutôt qu'un lieu personnalisé) — voir resolvePlace
+// dans src/core/report.js.
+function showPlaceExtra(value){
+  return value === 'Autre' || value === 'Parking public';
+}
+
+function placeExtraPlaceholder(value){
+  return value === 'Parking public' ? t('field.parkingNamePlaceholder') : t('field.placeOtherPlaceholder');
 }
 
 function togglePorterCustom(){
@@ -86,7 +127,7 @@ function missionFromRow(r){
   Object.assign(m, r);
   if(!r.date) m.date = todayStr();
   applyPlaceDefaults(m, CFG.places);
-  if(r.noteBlock) applyNoteBlock(m, r.noteBlock, { onlyIfEmpty: false });
+  if(r.noteBlock) applyNoteBlock(m, r.noteBlock, CFG, { onlyIfEmpty: false });
   delete m.noteBlock;
   return m;
 }
@@ -356,36 +397,18 @@ function renderMission(m, idx){
 
           <div class="field">
             <label>${t('field.meetPlace')}</label>
-            <select id="${fieldId(idx,'lieuRencontre')}" onchange="toggleAutre(${idx},'lieuRencontre')">
-              <option value="Dépose minute" ${m.lieuRencontre==='Dépose minute'?'selected':''}>${opt('places','Dépose minute')}</option>
-              <option value="Tapis bagage" ${m.lieuRencontre==='Tapis bagage'?'selected':''}>${opt('places','Tapis bagage')}</option>
-              <option value="Parking pro" ${m.lieuRencontre==='Parking pro'?'selected':''}>${opt('places','Parking pro')}</option>
-              <option value="Parking public" ${m.lieuRencontre==='Parking public'?'selected':''}>${opt('places','Parking public')}</option>
-              <option value="Linéaire Professionnel" ${m.lieuRencontre==='Linéaire Professionnel'?'selected':''}>${opt('places','Linéaire Professionnel')}</option>
-              <option value="Gare routière (BUS)" ${m.lieuRencontre==='Gare routière (BUS)'?'selected':''}>${opt('places','Gare routière (BUS)')}</option>
-              <option value="Loueurs" ${m.lieuRencontre==='Loueurs'?'selected':''}>${opt('places','Loueurs')}</option>
-              <option value="Vol privé" ${m.lieuRencontre==='Vol privé'?'selected':''}>${opt('places','Vol privé')}</option>
-              <option value="Autre" ${m.lieuRencontre==='Autre'?'selected':''}>${opt('places','Autre')}</option>
-              <option value="N/A" ${m.lieuRencontre==='N/A'?'selected':''}>${opt('places','N/A')}</option>
+            <select id="${fieldId(idx,'lieuRencontre')}" onchange="togglePlaceExtra(${idx},'lieuRencontre')">
+              ${placeOptionsHtml(m.type, 'meet', m.lieuRencontre, m.vol)}
             </select>
-            <input class="autre-input" id="${fieldId(idx,'lieuRencontreAutre')}" placeholder="${t('field.placeOtherPlaceholder')}" value="${m.lieuRencontreAutre||''}" style="display:${m.lieuRencontre==='Autre'?'block':'none'}">
+            <input class="autre-input" id="${fieldId(idx,'lieuRencontreAutre')}" placeholder="${placeExtraPlaceholder(m.lieuRencontre)}" value="${m.lieuRencontreAutre||''}" style="display:${showPlaceExtra(m.lieuRencontre)?'block':'none'}">
           </div>
 
           <div class="field">
             <label>${t('field.dropPlace')}</label>
-            <select id="${fieldId(idx,'lieuDepose')}" onchange="toggleAutre(${idx},'lieuDepose')">
-              <option value="AUTO_CHECKIN" ${m.lieuDepose==='AUTO_CHECKIN'?'selected':''}>${t('field.autoCheckin', { vol: m.vol })}</option>
-              <option value="Dépose minute" ${m.lieuDepose==='Dépose minute'?'selected':''}>${opt('places','Dépose minute')}</option>
-              <option value="Tapis bagage" ${m.lieuDepose==='Tapis bagage'?'selected':''}>${opt('places','Tapis bagage')}</option>
-              <option value="Parking pro" ${m.lieuDepose==='Parking pro'?'selected':''}>${opt('places','Parking pro')}</option>
-              <option value="Parking public" ${m.lieuDepose==='Parking public'?'selected':''}>${opt('places','Parking public')}</option>
-              <option value="Gare routière (BUS)" ${m.lieuDepose==='Gare routière (BUS)'?'selected':''}>${opt('places','Gare routière (BUS)')}</option>
-              <option value="Loueurs" ${m.lieuDepose==='Loueurs'?'selected':''}>${opt('places','Loueurs')}</option>
-              <option value="Vol privé" ${m.lieuDepose==='Vol privé'?'selected':''}>${opt('places','Vol privé')}</option>
-              <option value="Autre" ${m.lieuDepose==='Autre'?'selected':''}>${opt('places','Autre')}</option>
-              <option value="N/A" ${m.lieuDepose==='N/A'?'selected':''}>${opt('places','N/A')}</option>
+            <select id="${fieldId(idx,'lieuDepose')}" onchange="togglePlaceExtra(${idx},'lieuDepose')">
+              ${placeOptionsHtml(m.type, 'drop', m.lieuDepose, m.vol)}
             </select>
-            <input class="autre-input" id="${fieldId(idx,'lieuDeposeAutre')}" placeholder="${t('field.placeOtherPlaceholder')}" value="${m.lieuDeposeAutre||''}" style="display:${m.lieuDepose==='Autre'?'block':'none'}">
+            <input class="autre-input" id="${fieldId(idx,'lieuDeposeAutre')}" placeholder="${placeExtraPlaceholder(m.lieuDepose)}" value="${m.lieuDeposeAutre||''}" style="display:${showPlaceExtra(m.lieuDepose)?'block':'none'}">
           </div>
 
           <div class="field full"><label>${t('field.problem')}</label><textarea class="small" id="${fieldId(idx,'probleme')}">${m.probleme}</textarea></div>
@@ -537,12 +560,30 @@ function updateTypeBadge(idx){
     badge.className = `badge badge-${type||'Service'}`;
     badge.textContent = typeIcon(type) + (type || '—');
   }
+  refreshPlaceSelect(idx, 'lieuRencontre', 'meet', type);
+  refreshPlaceSelect(idx, 'lieuDepose', 'drop', type);
 }
 
-function toggleAutre(idx, field){
+// Change de type (manuel, en cours d'édition) : les options de lieu sont
+// restreintes par type (voir cfg.placeOptions) donc doivent être régénérées.
+// Garde la sélection courante si elle reste valide dans la nouvelle liste ;
+// sinon retombe sur le défaut du nouveau type (cfg.places), même valeur que
+// celle posée à l'extraction par `applyPlaceDefaults`.
+function refreshPlaceSelect(idx, field, slot, type){
+  const sel = document.getElementById(fieldId(idx, field));
+  if(!sel) return;
+  const options = placeOptionsFor(type, slot);
+  const current = sel.value;
+  const next = options.includes(current) ? current : (CFG.places[type]?.[slot] || '');
+  sel.innerHTML = placeOptionsHtml(type, slot, next, val(idx, 'vol'));
+  togglePlaceExtra(idx, field);
+}
+
+function togglePlaceExtra(idx, field){
   const sel = document.getElementById(fieldId(idx, field));
   const inp = document.getElementById(fieldId(idx, field+'Autre'));
-  inp.style.display = sel.value === 'Autre' ? 'block' : 'none';
+  inp.style.display = showPlaceExtra(sel.value) ? 'block' : 'none';
+  inp.placeholder = placeExtraPlaceholder(sel.value);
 }
 
 function updateTotal(idx){
@@ -555,18 +596,6 @@ function updateTotal(idx){
 function val(idx,name){
   const el = document.getElementById(fieldId(idx,name));
   return el ? el.value.trim() : '';
-}
-
-function resolveLieu(idx, field){
-  const selVal = val(idx, field);
-  if(selVal === 'Autre'){
-    return val(idx, field+'Autre');
-  }
-  if(selVal === 'AUTO_CHECKIN'){
-    const vol = val(idx,'vol');
-    return vol ? `Check in ${vol}` : 'Check in';
-  }
-  return selVal;
 }
 
 function validateMission(idx){
@@ -679,10 +708,9 @@ window.addManualMission = addManualMission;
 window.removeMission = removeMission;
 window.toggleMission = toggleMission;
 window.markNoShow = markNoShow;
-window.toggleAutre = toggleAutre;
+window.togglePlaceExtra = togglePlaceExtra;
 window.updateTotal = updateTotal;
 window.updateTypeBadge = updateTypeBadge;
-window.resolveLieu = resolveLieu;
 window.generateReport = generateReport;
 window.copyReport = copyReport;
 window.copyFlight = copyFlight;

@@ -77,10 +77,11 @@ export function parseNoteBlock(text, cfg) {
  * silencieusement par la note.
  * @param {object} mission
  * @param {{greetSign: string, bagStandard: number|null, bagHorsFormat: number|null, detaxe: boolean, place: string|null, porterNote: string}} parsed
+ * @param {import('../config/nce-wellcom.js').SiteConfig} cfg  pour comparer au défaut DEP configuré (`cfg.places.DEP.meet`), jamais un littéral en dur — voir CLAUDE.md racine (le défaut DEP a déjà changé une fois)
  * @param {object} [opts]
  * @param {boolean} [opts.onlyIfEmpty]  n'écrit que si le champ est encore à sa valeur de repli (repli texte, ne doit jamais écraser une extraction PDF déjà posée)
  */
-export function applyNoteBlock(mission, parsed, opts = {}) {
+export function applyNoteBlock(mission, parsed, cfg, opts = {}) {
   const onlyIfEmpty = !!opts.onlyIfEmpty;
   if (parsed.greetSign && (!onlyIfEmpty || !mission.greetSign)) mission.greetSign = parsed.greetSign;
   if (parsed.bagStandard != null && (!onlyIfEmpty || !mission.bagExpected)) {
@@ -94,7 +95,8 @@ export function applyNoteBlock(mission, parsed, opts = {}) {
   if (parsed.place === 'Parking pro' || parsed.place === 'Parking public') {
     if (mission.type === 'ARR' && (!onlyIfEmpty || mission.lieuDepose === 'Parking pro')) mission.lieuDepose = parsed.place;
   } else if (parsed.place === 'Dépose minute') {
-    if (mission.type === 'DEP' && (!onlyIfEmpty || mission.lieuRencontre === 'Dépose minute')) mission.lieuRencontre = parsed.place;
+    const depMeetDefault = cfg.places.DEP.meet;
+    if (mission.type === 'DEP' && (!onlyIfEmpty || mission.lieuRencontre === depMeetDefault)) mission.lieuRencontre = parsed.place;
     else if (mission.type === 'ARR' && (!onlyIfEmpty || mission.lieuDepose === 'Parking pro')) mission.lieuDepose = parsed.place;
   }
   return mission;

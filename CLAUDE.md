@@ -137,13 +137,28 @@ l'extraction, jamais réécrasé par l'undo ou l'édition manuelle)
 | Type | Lieu de rencontre | Lieu de dépose |
 |---|---|---|
 | Arrivée (ARR) | Tapis bagage | Parking pro |
-| Départ (DEP) | Dépose minute | Check-in + vol (`AUTO_CHECKIN`) |
+| Départ (DEP) | Linéaire Professionnel | Check-in + vol (`AUTO_CHECKIN`) |
 | Transit (TRS) | *(vide)* | *(vide)* |
 
 Décision métier explicite de Damien (pas une déduction du planning) : ces
 valeurs sont volontairement déterministes par type, indépendamment de ce
 que dit l'itinéraire PDF. Si un cas dérogeant existe, c'est à corriger
-manuellement sur la carte.
+manuellement sur la carte. Le défaut « Départ / Lieu de rencontre » est
+passé de `Dépose minute` à `Linéaire Professionnel` (voir §5 point 38) —
+`Dépose minute` reste une option sélectionnable, seul le défaut a changé.
+
+**Options des `<select>` lieu de rencontre/dépose restreintes par type**
+(§5 point 38, `cfg.placeOptions`) : chaque type (ARR/DEP) n'affiche que les
+lieux réellement possibles pour ce sens de mission — ex. « Linéaire
+Professionnel » n'apparaît que pour DEP/rencontre, « Tapis bagage » que pour
+ARR/rencontre. TRS (et « Service », extraction sans vol) n'ont pas de liste
+dédiée : l'UI affiche l'union de toutes les valeurs ARR/DEP plutôt qu'une
+liste vide. Changer le type d'une mission (manuellement, en cours d'édition)
+régénère les deux `<select>` ; si la valeur actuelle n'est plus dans la
+nouvelle liste, elle retombe sur le défaut du nouveau type. `Parking public`
+affiche un champ libre « nom du parking » (même mécanisme que `Autre`,
+même champ de stockage `lieu*Autre`) — voir `resolvePlace` dans
+`src/core/report.js` pour le format `Parking public : NOM` dans le rapport.
 
 **Nuance depuis §5 point 32** : pour les missions agence dont la note au
 porteur contient le bloc « services » structuré (voir `noteBlock.js`), le
@@ -904,6 +919,112 @@ un bug déjà corrigé) :
       fixtures existantes (dont `planning-04-hors-format-note.pdf`, qui a
       immédiatement détecté la régression du premier correctif de
       `porterPaidBagsNote`).
+37. **Bagage hors format perdu — débordement Itinéraire→Véhicule** (bug
+    signalé par l'utilisateur avec le même fixture `planning-04-hors-format-
+    note.pdf`, mission Bastien D/Zaidan, page 5) : nouvelle famille de bug
+    « débordement de colonne », cousine du point 35/36 mais sur une
+    troisième frontière — Itinéraire (3) ↔ Véhicule (4) cette fois, pas
+    Note (5) ↔ Type (6). Sur une mission à itinéraire deux-étapes horodaté
+    (« 18:25 - ... , N° Vol TK1815 , Terminal T1 18:25:00\n21:25 - Parking
+    Pro »), la phrase « N° Vol TK1815 , » est coupée EN PLEIN MILIEU par
+    `colOf()` à midpoint géométrique : mesuré sur le PDF réel, « N° »
+    (x=438.59) et « Vol » (x=449.88) retombent côté colonne 3 (Itinéraire),
+    mais « TK1815 » (x=464.92) et la virgule qui suit (x=491.24) retombent
+    côté colonne 4 (Véhicule) — le midpoint 3/4 vaut 457. Comme la colonne 4
+    est fusionnée à la fois dans `itin` (cols 3+4, voulu — voir point 2, pour
+    récupérer un « Terminal » qui dérive en colonne 4) ET dans le texte note
+    (cols 4+5, `noteColumns`), ce fragment se retrouvait donc AUSSI dans
+    `noteBlockText`, intercalé entre "HORS" et "FORMAT" (leur Y quasi
+    identique — 0.66pt d'écart — les place sur la même « ligne » après
+    `lineize()`), cassant le regex `bagHorsFormat`. Root cause confirmée par
+    dump direct des coordonnées de tokens (mission Bastien D : `noteBlock`
+    retournait `bagHorsFormat: null` malgré un « 1 x BAGAGE HORS FORMAT »
+    bien présent dans le PDF). Fix : nouvelle fonction
+    `stripLeakedFlightCode(text, vol)` dans `parser-pdf.js`, appelée dans
+    `rowToFields` juste avant `parseNoteBlock` — retire le code de vol de la
+    ligne (déjà calculé via `flightFromItinerary`, donc un marqueur fiable
+    et spécifique à CETTE mission, contrairement à un token générique comme
+    « NCE ») ainsi que les virgules isolées (le vocabulaire du bloc note/
+    services n'en utilise jamais). Contrairement au fix `stripSiteCode`
+    (token constant « NCE »), celui-ci est nécessairement calculé par ligne
+    puisque le code de vol change à chaque mission. **Piège à garder en
+    tête** : la frontière col3/col4 est un point de débordement connu et
+    déjà exploité (point 2, dans l'autre sens), donc TOUTE fusion de
+    colonnes dans ce fichier (`joinCols([3,4])`, `noteColumns:[4,5]`) reste
+    une zone où un fragment peut apparaître dans deux champs à la fois —
+    toujours envisager cette classe de bug en premier si un champ du bloc
+    note perd un mot sans raison évidente sur le texte lui-même. Test de
+    régression ajouté : `planning-04-hors-format-note.pdf` / Bastien D
+    (booking `2026-002596`, vol `TK1815`), vérifie `bagHorsFormatExpected
+    === '1'` (avant fix : `''`, perdu). `npm test` : 37/37.
+38. **Restriction des lieux de rencontre/dépose par type de mission +
+    nouveau lieu « Parking public » avec nom associé** : demande explicite
+    de l'utilisateur — la liste des lieux affichés dans les `<select>`
+    rencontre/dépose était jusqu'ici unique et partagée entre tous les
+    types, alors qu'en pratique un ARR et un DEP n'ont pas les mêmes lieux
+    possibles (ex. « Linéaire Professionnel » n'a de sens qu'au départ).
+    Quatre listes distinctes fournies par l'utilisateur (ARR-rencontre,
+    ARR-dépose, DEP-rencontre, DEP-dépose), chacune avec un défaut explicite
+    — nouveau `cfg.placeOptions` dans `nce-wellcom.js`. Changement de
+    donnée notable au passage : le défaut « Départ / Lieu de rencontre »
+    passe de `Dépose minute` à **`Linéaire Professionnel`** (annoté
+    « par défaut » par l'utilisateur dans sa spécification, contrairement
+    aux autres lieux de la même liste) — mis à jour dans `cfg.places.DEP`,
+    dans le repli fixe de `createMission()` (`lieuRencontre`, sinon une
+    mission manuelle — qui n'appelle jamais `applyPlaceDefaults`, voir
+    §5 point 23 — resterait sur l'ancien défaut), et dans le sentinel de
+    garde `onlyIfEmpty` d'`applyNoteBlock` (`src/core/noteBlock.js`), qui
+    comparait `mission.lieuRencontre === 'Dépose minute'` en dur pour
+    décider si le champ est « encore à son défaut, donc écrasable par la
+    note » — comparait donc contre une valeur qui n'est plus jamais le
+    défaut réel, cassant silencieusement l'écrasement pour toute mission DEP
+    avec une note « Dépose-minute ». Fix : `applyNoteBlock` reçoit
+    désormais `cfg` en paramètre et compare contre `cfg.places.DEP.meet`
+    (jamais un littéral en dur) — les deux appelants (`missionFromRow` dans
+    `app.js`, `enrichWithNotes` dans `enrich.js`) mis à jour pour passer
+    `cfg`/`CFG`. Nouveau lieu **« Parking public »** (déjà une valeur
+    existante, mais sans champ associé) gagne un champ libre « nom du
+    parking à donner », en réutilisant exactement le même mécanisme que
+    « Autre » (même champ de stockage `lieuRencontreAutre`/
+    `lieuDeposeAutre`, même toggle de visibilité — renommé `toggleAutre` →
+    `togglePlaceExtra` puisqu'il ne gère plus seulement « Autre » — et
+    même placeholder dynamique selon la valeur choisie, nouvelle clé
+    `field.parkingNamePlaceholder`). `resolvePlace` (`src/core/report.js`)
+    étendu pour composer `Parking public : NOM` dans le rapport (comme
+    `Autre` composait déjà `m[field+'Autre']`). TRS et « Service »
+    (extraction sans vol) n'ont pas de liste dédiée dans la demande
+    utilisateur — l'UI leur affiche l'union de toutes les valeurs ARR/DEP
+    (`ALL_PLACE_VALUES` dans `app.js`) plutôt qu'une liste vide, pour ne
+    jamais rendre un lieu déjà choisi inaccessible. Changer le type d'une
+    mission (select « Type de service », en cours d'édition) régénère
+    désormais aussi les deux `<select>` lieu (`refreshPlaceSelect`, appelée
+    depuis `updateTypeBadge`, déjà câblée sur l'onchange du type) — garde
+    la valeur courante si elle reste valide dans la nouvelle liste, sinon
+    retombe sur le défaut du nouveau type. `Vol privé` (ancienne option,
+    absente des quatre nouvelles listes fournies par l'utilisateur) a été
+    retirée des options actives et de `optionLabels.places` (fr/en) — code
+    mort, aucune mission n'a de valeur persistante au-delà de 3 jours (voir
+    §5 point 21). Nettoyage au passage : `resolveLieu` (fonction dans
+    `app.js`, exportée sur `window` mais jamais appelée nulle part — grep
+    confirmé, doublon obsolète de `resolvePlace` dans `report.js`, qui est
+    la fonction réellement utilisée par `generateReportText`) et l'import
+    mort correspondant de `resolvePlace` dans `app.js` ont été supprimés.
+    Vérifié dans le navigateur (`run-rapport`) : liste DEP-rencontre affiche
+    bien « Linéaire Professionnel » sélectionné par défaut sur une mission
+    manuelle fraîche ; changer le type ARR→DEP puis DEP→ARR régénère
+    correctement les deux listes avec le bon défaut à chaque fois ;
+    sélectionner « Parking public » affiche le champ libre avec le
+    placeholder « Nom du parking » (FR) / « Parking name » (EN) ; rapport
+    généré avec « Parking Azur » saisi affiche bien
+    « Lieu de dépose : Parking public : Parking Azur » ; bascule FR
+    confirmée sur les nouveaux libellés (« Hélicoptères », « Terminal
+    affaires »). Tests ajoutés : `applyPlaceDefaults` étendu pour vérifier
+    le nouveau défaut DEP ; `resolvePlace` (2 cas, avec/sans nom de
+    parking) ; fixture DEP de `enrichWithNotes` mise à jour pour utiliser le
+    vrai défaut `Linéaire Professionnel` (l'ancienne valeur `Dépose minute`
+    masquait un faux positif — le test passait même si `applyNoteBlock`
+    n'écrasait jamais rien, la valeur de départ égalant déjà la valeur
+    attendue). `npm test` : 38/38.
 
 ---
 

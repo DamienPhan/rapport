@@ -112,6 +112,6 @@ export function enrichWithNotes(missions, fullText, cfg) {
   missions.forEach((m) => {
     const win = missionWindow(fullText, m.booking);
     if (!win) return;
-    applyNoteBlock(m, parseNoteBlock(win, cfg), { onlyIfEmpty: true });
+    applyNoteBlock(m, parseNoteBlock(win, cfg), cfg, { onlyIfEmpty: true });
   });
 }
