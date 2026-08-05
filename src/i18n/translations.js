@@ -58,7 +58,8 @@ export const translations = {
       live: ' (LIVE)',
     },
     note: {
-      greetSign: "Panneau d'accueil",
+      greetSign: 'Panneau',
+      bagExpected: 'Bagages prévus',
     },
     section: {
       identity: 'Identité',
@@ -80,7 +81,6 @@ export const translations = {
       copyFlightTitle: 'Copier le numéro de vol',
       terminal: 'Terminal',
       bagStandard: 'Standard',
-      bagExpectedHint: ({ n }) => `Attendu selon le planning : ${n}`,
       bagOversize: 'Hors format',
       bagCage: 'Cage animal',
       bagTotal: 'Total bagages pris en charge',
@@ -190,7 +190,8 @@ export const translations = {
       live: ' (LIVE)',
     },
     note: {
-      greetSign: 'Greet sign',
+      greetSign: 'Sign',
+      bagExpected: 'Expected bags',
     },
     section: {
       identity: 'Identity',
@@ -212,7 +213,6 @@ export const translations = {
       copyFlightTitle: 'Copy flight number',
       terminal: 'Terminal',
       bagStandard: 'Standard',
-      bagExpectedHint: ({ n }) => `Expected per schedule: ${n}`,
       bagOversize: 'Oversized',
       bagCage: 'Animal cage',
       bagTotal: 'Total baggage handled',
