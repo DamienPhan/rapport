@@ -726,6 +726,22 @@ un bug déjà corrigé) :
     schedule: 5 » apparaît sous un champ Standard resté à `1`, et le rapport
     généré affiche bien `Panneau d'accueil : Bader Alosaimi`. `npm test` :
     25/25, inchangé en nombre (tests adaptés, pas ajoutés).
+34. **Retouche du point 33 — regroupement et renommage des deux notes** :
+    demande utilisateur juste après la livraison du point 33. `bagExpected`
+    passe de l'indice discret (`.hint`) sous le champ Standard à une
+    deuxième note pleine largeur (`.note-banner`, même style que le panneau
+    d'accueil) juste EN DESSOUS de la note panneau d'accueil, donc toutes
+    les deux tout en haut du corps de la carte, avant même la section
+    Identité — les deux se lisent d'un coup d'œil à l'ouverture, sans
+    scroller jusqu'à la section Bagages. Libellés raccourcis :
+    « Panneau d'accueil » → **« Panneau »**, « Attendu selon le planning »
+    → **« Bagages prévus »** (clé `field.bagExpectedHint` supprimée,
+    remplacée par `note.bagExpected`, symétrique à `note.greetSign`).
+    Revérifié dans le navigateur dans les deux langues (repli copier-coller,
+    même mission Bader Alosaimi) : FR affiche « 🪧 Panneau : Bader Alosaimi »
+    puis « 🧳 Bagages prévus : 5 » l'un sous l'autre ; EN affiche
+    « Sign : Bader Alosaimi » puis « Expected bags : 5 ». `npm test` : 25/25,
+    inchangé.
 
 ---
 
