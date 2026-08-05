@@ -362,6 +362,16 @@
     padding:10px;
     margin-bottom:10px;
   }
+  .note-banner{
+    background:var(--cream);
+    border:1px solid var(--cream-line);
+    border-radius:10px;
+    padding:9px 12px;
+    margin-bottom:10px;
+    font-size:.85rem;
+    color:var(--navy-2);
+  }
+  .note-banner strong{color:var(--gold-deep);}
   .candidates .clabel{
     font-size:.72rem;
     color:var(--gold-deep);

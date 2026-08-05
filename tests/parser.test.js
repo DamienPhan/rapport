@@ -147,8 +147,8 @@ test('enrichWithPhones ne déborde pas sur le téléphone de la mission suivante
 // assistance détaxe prépayée, lieu réel de prise en charge/dépose.
 test('enrichWithNotes lit le panneau d\'accueil, ignore "null"', () => {
   const missions = [
-    { booking: '11780-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
-    { booking: '11942-1', type: 'ARR', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
+    { booking: '11780-1', type: 'DEP', greetSign: '', bagStandard: '1', bagExpected: '', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
+    { booking: '11942-1', type: 'ARR', greetSign: '', bagStandard: '1', bagExpected: '', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
   ];
   const fullText = `
 11780-1
@@ -175,10 +175,10 @@ Flight Class : business
   assert.strictEqual(missions[1].greetSign, '');
 });
 
-test('enrichWithNotes calcule le total bagages (4 inclus + N supplémentaires)', () => {
+test('enrichWithNotes calcule bagExpected (4 inclus + N supplémentaires), sans toucher bagStandard', () => {
   const missions = [
-    { booking: '11835-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
-    { booking: '11780-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
+    { booking: '11835-1', type: 'DEP', greetSign: '', bagStandard: '1', bagExpected: '', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
+    { booking: '11780-1', type: 'DEP', greetSign: '', bagStandard: '1', bagExpected: '', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
   ];
   const fullText = `
 11835-1
@@ -197,8 +197,10 @@ inclus dans le forfait
 ------------------------------
 `;
   enrichWithNotes(missions, fullText, siteConfig);
-  assert.strictEqual(missions[0].bagStandard, '12'); // 4 inclus + 8 supplémentaires
-  assert.strictEqual(missions[1].bagStandard, '4'); // 4 inclus, aucun supplémentaire listé
+  assert.strictEqual(missions[0].bagExpected, '12'); // 4 inclus + 8 supplémentaires
+  assert.strictEqual(missions[0].bagStandard, '1'); // jamais écrasé, reste au champ saisi par le porteur
+  assert.strictEqual(missions[1].bagExpected, '4'); // 4 inclus, aucun supplémentaire listé
+  assert.strictEqual(missions[1].bagStandard, '1');
 });
 
 test('enrichWithNotes détecte l\'assistance détaxe prépayée', () => {
@@ -353,7 +355,8 @@ async function runPdfTests() {
         const depose = missions.find((m) => m.vol === 'AF7305');
         assert.ok(depose, 'mission AF7305 introuvable');
         assert.strictEqual(depose.greetSign, '');
-        assert.strictEqual(depose.bagStandard, '4');
+        assert.strictEqual(depose.bagExpected, '4');
+        assert.strictEqual(depose.bagStandard, '1'); // jamais écrasé, note affichée à part (voir CLAUDE.md §5 point 33)
         assert.strictEqual(depose.detaxe, 'Oui');
         assert.strictEqual(depose.lieuRencontre, 'Dépose minute');
 
@@ -362,7 +365,8 @@ async function runPdfTests() {
         const arrivee = missions.find((m) => m.vol === 'KU181' && m.client === 'Bader Alosaimi');
         assert.ok(arrivee, 'mission Bader Alosaimi introuvable');
         assert.strictEqual(arrivee.greetSign, 'Bader Alosaimi');
-        assert.strictEqual(arrivee.bagStandard, '5');
+        assert.strictEqual(arrivee.bagExpected, '5');
+        assert.strictEqual(arrivee.bagStandard, '1');
         assert.strictEqual(arrivee.lieuDepose, 'Parking pro');
       });
     }

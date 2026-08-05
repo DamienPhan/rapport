@@ -54,6 +54,12 @@ export function parseNoteBlock(text, cfg) {
  * Applique le résultat de `parseNoteBlock` à une mission, en respectant la
  * convention lieu de rencontre (départ) / lieu de dépose (arrivée) déjà
  * utilisée par `applyPlaceDefaults`.
+ *
+ * `greetSign` et `bagExpected` (nombre de bagages attendu selon la note) ne
+ * sont jamais posés dans un champ éditable du formulaire — ce sont de
+ * simples notes de référence affichées à côté (voir `src/ui/app.js`) ;
+ * `bagStandard` (le champ éditable) reste toujours à la valeur saisie par
+ * le porteur, jamais écrasée silencieusement par la note.
  * @param {object} mission
  * @param {{greetSign: string, bagStandard: number|null, detaxe: boolean, place: string|null}} parsed
  * @param {object} [opts]
@@ -62,8 +68,8 @@ export function parseNoteBlock(text, cfg) {
 export function applyNoteBlock(mission, parsed, opts = {}) {
   const onlyIfEmpty = !!opts.onlyIfEmpty;
   if (parsed.greetSign && (!onlyIfEmpty || !mission.greetSign)) mission.greetSign = parsed.greetSign;
-  if (parsed.bagStandard != null && (!onlyIfEmpty || mission.bagStandard === '1')) {
-    mission.bagStandard = String(parsed.bagStandard);
+  if (parsed.bagStandard != null && (!onlyIfEmpty || !mission.bagExpected)) {
+    mission.bagExpected = String(parsed.bagStandard);
   }
   if (parsed.detaxe && (!onlyIfEmpty || mission.detaxe === 'Non')) mission.detaxe = 'Oui';
   if (parsed.place === 'Parking pro' || parsed.place === 'Parking public') {

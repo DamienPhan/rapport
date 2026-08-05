@@ -102,15 +102,16 @@ Aucun backend. `pdf.js` est chargé depuis un CDN. Les modules ES exigent
   lieuRencontre, lieuRencontreAutre,
   lieuDepose, lieuDeposeAutre,               // 'AUTO_CHECKIN' = calculé depuis le vol ; 'N/A' possible
   probleme, porteurs, satisfaction,          // satisfaction : ... | N/A
-  bagStandard, bagHorsFormat, bagCage,      // bagStandard défaut '1' ; hf/cage défaut '0', inputs numériques libres
+  bagStandard, bagExpected, bagHorsFormat, bagCage,  // bagStandard défaut '1' (toujours éditable, jamais écrasé par la note — voir §5 point 33) ; bagExpected = repère lecture seule ; hf/cage défaut '0', inputs numériques libres
   sortTime,                                  // pour le tri chronologique ET l'heure affichée dans la bannière (fmtTime)
   bookingOptions, flightOptions              // peuplés uniquement si "chips"
 }
 ```
 
 **Champs ajoutés récemment** : `greeteurPhone`, `contactPhone` (téléphones
-cliquables, voir `src/core/CLAUDE.md`) ; `greetSign` (nom pour le panneau
-d'accueil, voir §5 point 32). Le type accepte désormais **`TRS`** (transit terminal à
+cliquables, voir `src/core/CLAUDE.md`) ; `greetSign`/`bagExpected` (repères
+en lecture seule — panneau d'accueil et nombre de bagages attendu selon la
+note, jamais des champs éditables, voir §5 points 32-33). Le type accepte désormais **`TRS`** (transit terminal à
 terminal) en plus de ARR/DEP/Service.
 
 **Tous les champs de `createMission()` sont des constantes fixes** (plus
@@ -169,17 +170,22 @@ des missions ACA classiques).
 
 ### Conventions de saisie / rapport (décisions Damien)
 
-- **Bagages** : `bagStandard` vaut **1 par défaut** (les missions ACA
-  classiques n'indiquent jamais le nombre réel) ; `bagHorsFormat` et
+- **Bagages** : `bagStandard` vaut **1 par défaut**, toujours éditable par
+  le porteur, **jamais** écrasé automatiquement (voir §5 point 33 —
+  l'extraction ne fait jamais confiance aveuglément à la note pour un
+  compte aussi important pour la facturation). `bagHorsFormat` et
   `bagCage` valent 0. Hors-format et cage animal sont des **inputs
   numériques libres** (il peut y en avoir beaucoup — l'ancien select 0–5/N-A
   était trop limité). Dans le rapport généré, hors-format/cage affichent
   **`N/A` (majuscules) si vide ou 0**, sinon le nombre ; le total = standard
   + hors-format + cage (valeurs nulles ou `N/A` comptées comme 0).
-  **Exception** (§5 point 32) : les missions agence dont la note contient le
-  bloc « services » structuré ont un vrai nombre extrait — `bagStandard` =
-  bagages inclus dans le forfait (`cfg.baggage.includedInPackage`, 4 chez
-  Well'Com Air) + excédent listé séparément dans la note.
+  **Repère lecture seule** (§5 point 32-33) : les missions agence dont la
+  note contient le bloc « services » structuré affichent un indice
+  « Attendu selon le planning : N » sous le champ Standard (`bagExpected`,
+  jamais dans le rapport, jamais dans un champ éditable) — N = bagages
+  inclus dans le forfait (`cfg.baggage.includedInPackage`, 4 chez Well'Com
+  Air) + excédent listé séparément dans la note. Au porteur de compter et
+  saisir la vraie valeur dans `bagStandard`.
 - **NO SHOW** (`markNoShow`, bouton rouge dans l'entête de carte) : marque
   une mission « client absent ». Conserve l'**identité** (booking, date,
   client, greeteur, prébooking, type, vol, terminal) et met **tout le reste
@@ -682,10 +688,44 @@ un bug déjà corrigé) :
       `pdf.js` est chargé depuis un CDN externe (`cdnjs.cloudflare.com`),
       bloqué par la politique réseau de cet environnement (même contrainte
       que l'accès à `github.io` rencontré plus tôt) — la commande reste
-      utile pour un futur environnement avec accès réseau complet. Le rendu
-      du nouveau champ (`Greet sign (optional)`) et la ligne
-      `Panneau d'accueil : NOM` du rapport ont été vérifiés dans le
-      navigateur via le flux mission manuelle (qui ne dépend pas du CDN).
+      utile pour un futur environnement avec accès réseau complet. Le
+      chemin PDF (extraction + rendu) a été vérifié en simulant l'upload via
+      `eval` sur `#planningInput` (repli copier-coller, contourne le CDN) —
+      voir aussi point 33 ci-dessous, revérifié dans le navigateur.
+33. **Retouche point 32 — `greetSign` et le nombre de bagages attendu ne
+    doivent pas être des champs éditables** : retour utilisateur juste après
+    la livraison du point 32. Deux changements :
+    - **`greetSign`** : n'est plus un `<input>` du formulaire (identité).
+      Affiché comme une note en lecture seule (`.note-banner`, style
+      cream/gold-deep cohérent avec `.candidates`), tout en haut du corps de
+      la carte, juste après `renderCandidates` — visible dès l'ouverture,
+      avant même la section Identité. `🪧 Panneau d'accueil : NOM`, omis si
+      vide. `generateReportText` inchangé (lit toujours `m.greetSign`,
+      jamais modifié depuis l'UI puisqu'il n'y a plus de champ pour ça).
+    - **Nombre de bagages attendu** : `applyNoteBlock` n'écrit plus dans
+      `bagStandard` (le champ éditable saisi par le porteur, qui reste
+      TOUJOURS à sa valeur de repli `'1'` tant que le porteur ne la modifie
+      pas lui-même — même philosophie que « aucune extraction ne renseigne
+      jamais ce champ », voir §5 point 16, à nouveau vraie pour la valeur
+      éditée). Le total du bloc note (4 inclus + excédent) est stocké à part
+      dans un nouveau champ non éditable `bagExpected`, affiché comme
+      indice (`.hint`, déjà utilisé ailleurs dans l'app) juste sous le champ
+      Standard : « Attendu selon le planning : N ». Le porteur reste seul
+      responsable de la valeur qui part dans le rapport — la note sert de
+      référence pour vérifier après avoir compté les bagages, pas une
+      valeur imposée silencieusement.
+    Mission model : ajout de `bagExpected` (`createMission()`, repli `''`,
+    jamais hérité d'une mission précédente — même garantie que tous les
+    autres champs, voir §5 points 27-28). Tests unitaires et d'intégration
+    PDF du point 32 mis à jour pour vérifier `bagExpected` au lieu de
+    `bagStandard`, plus une assertion explicite que `bagStandard` reste à
+    `'1'`. Vérifié dans le navigateur (repli copier-coller avec un extrait
+    réel de `planning-25-services-block.pdf`, porteur François L., mission
+    Bader Alosaimi) : la note « 🪧 Greet sign : Bader Alosaimi » s'affiche
+    en haut de la carte sans champ associé, l'indice « Expected per
+    schedule: 5 » apparaît sous un champ Standard resté à `1`, et le rapport
+    généré affiche bien `Panneau d'accueil : Bader Alosaimi`. `npm test` :
+    25/25, inchangé en nombre (tests adaptés, pas ajoutés).
 
 ---
 
