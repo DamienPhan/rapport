@@ -35,6 +35,15 @@ export const siteConfig = {
     columnCount: 7,
     /** Index des colonnes contenant la note au porteur (nom du greeter, etc.). */
     noteColumns: [4, 5],
+    /**
+     * Marge (px) tolérée au-delà de la frontière géométrique entre la
+     * dernière colonne note et la colonne suivante (Type), pour récupérer un
+     * mot qui déborde légèrement (nom de Greet Sign long, note libre — voir
+     * `isNoteCol` dans parser-pdf.js). Mesuré sur un cas réel : débordement
+     * à x≈676-678, contenu Type légitime le plus proche à x≈703 (marge >25px)
+     * — 25 laisse une marge de sécurité sans jamais capturer de texte Type.
+     */
+    noteOverflowMargin: 25,
     /** Index de la colonne « booking / mission ». */
     bookingColumn: 0,
     /** Index de la colonne client. */
@@ -86,10 +95,18 @@ export const siteConfig = {
     /** Confirme la présence du bloc bagages structuré (sinon `bagSupplementaire` seul n'a pas de sens). */
     bagStandardBlock: /x\s*bagage\s*standard/i,
     bagSupplementaire: /(\d+)\s*x\s*bagage\s*suppl[ée]mentaire/i,
+    /** Item distinct de bagSupplementaire (prix différent, +15€ vs +10€/piece) — pas ajouté au total bagStandard. */
+    bagHorsFormat: /(\d+)\s*x\s*bagage\s*hors\s*format/i,
     assistanceDetaxe: /assistance\s*d[ée]taxe/i,
     parkingProfessionnel: /parking\s*professionnel/i,
     parkingPublic: /parking\s*public/i,
     deposeMinuteService: /d[ée]pose-?\s*minute/i,
+    /**
+     * Note libre avant `Greet Sign:` confirmant le total prépayé (« N bags
+     * payé (si supp bags = a régler avec le porteur) ») — distincte du
+     * panneau d'accueil, capturée telle quelle (voir noteBlock.js).
+     */
+    porterPaidBagsNote: /\d+\s*bags?\s*pay[ée][^)]*\)/i,
   },
 
   /** Règles bagages propres au forfait Well'Com Air (voir bloc « services » ci-dessus). */

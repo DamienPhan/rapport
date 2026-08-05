@@ -67,6 +67,28 @@ function colOf(x, centers) {
   return centers.length - 1;
 }
 
+/**
+ * Comme `colOf(x, centers) ∈ noteCols`, mais tolère un débordement de
+ * quelques pixels au-delà de la frontière avec la colonne suivante (Type) :
+ * un nom de Greet Sign long ou une note libre peut se terminer juste après
+ * le midpoint géométrique (mesuré : x≈676-678 sur un cas réel) et se faire
+ * classer à tort dans la colonne Type par le simple `colOf()` à midpoint. Le
+ * contenu propre de la colonne Type (« Arrivée », « Départ », « Bagage
+ * standard »...) démarre nettement plus loin (mesuré : x>=~703, marge >25px
+ * par rapport au débordement) — élargir la frontière d'une marge fixe capture
+ * donc le débordement sans jamais capturer de contenu Type. Cible uniquement
+ * la frontière avec la colonne qui suit la dernière colonne note ; les autres
+ * frontières (ex. Itinéraire/Véhicule) restent strictes.
+ */
+function isNoteCol(x, centers, noteCols, overflowMargin) {
+  if (noteCols.indexOf(colOf(x, centers)) >= 0) return true;
+  const lastNote = Math.max(...noteCols);
+  const nextCol = lastNote + 1;
+  if (!overflowMargin || nextCol >= centers.length) return false;
+  const boundary = (centers[lastNote] + centers[nextCol]) / 2;
+  return x >= boundary && x < boundary + overflowMargin;
+}
+
 function joinCol(cells, c) {
   return cells[c].slice().sort((a, b) => a.y - b.y || a.x - b.x)
     .map((t) => t.text).join(' ');
@@ -207,11 +229,10 @@ function lieuFor(type, itin, cfg) {
   return type === 'ARR' ? cfg.places.arrDropFallback : cfg.places.depDropFallback;
 }
 
-function detectPorterLines(words, centers, noteCols) {
+function detectPorterLines(words, centers, noteCols, overflowMargin) {
   const toks = [];
   for (const w of words) {
-    const c = colOf(w.x, centers);
-    if (noteCols.indexOf(c) >= 0) toks.push(w);
+    if (isNoteCol(w.x, centers, noteCols, overflowMargin)) toks.push(w);
   }
   toks.sort((a, b) => a.y - b.y || a.x - b.x);
   const lines = [];
@@ -238,6 +259,7 @@ function reconstructPage(words, cfg) {
   const { centers, headerBottom: hb } = col;
   const bookingCol = cfg.pdfTable.bookingColumn;
   const noteCols = cfg.pdfTable.noteColumns;
+  const overflowMargin = cfg.pdfTable.noteOverflowMargin || 0;
 
   const anchors = [];
   for (const w of words) {
@@ -252,7 +274,7 @@ function reconstructPage(words, cfg) {
   for (let k = 1; k < anchors.length; k++) bounds.push((anchors[k - 1].y + anchors[k].y) / 2);
   bounds.push(Infinity);
 
-  const porterLines = detectPorterLines(words, centers, noteCols);
+  const porterLines = detectPorterLines(words, centers, noteCols, overflowMargin);
   const ranked = porterLines.length === anchors.length;
 
   const rows = [];
@@ -263,7 +285,8 @@ function reconstructPage(words, cfg) {
     for (const w of words) {
       if (w.y >= top && w.y < bot) cells[colOf(w.x, centers)].push(w);
     }
-    const vn = lineize(noteCols.reduce((acc, c) => acc.concat(cells[c]), []));
+    const vnToks = words.filter((w) => w.y >= top && w.y < bot && isNoteCol(w.x, centers, noteCols, overflowMargin));
+    const vn = lineize(vnToks);
 
     // Bloc « services » (voir noteBlock.js) : peut être bien plus haut que la
     // note greeter classique et déborder la bande anchor-midpoint sur la
@@ -280,7 +303,7 @@ function reconstructPage(words, cfg) {
       const nTop = porterLines[a].y;
       const nBot = a + 1 < porterLines.length ? porterLines[a + 1].y : Infinity;
       const svcToks = words.filter(
-        (w) => w.y >= nTop && w.y < nBot && noteCols.indexOf(colOf(w.x, centers)) >= 0
+        (w) => w.y >= nTop && w.y < nBot && isNoteCol(w.x, centers, noteCols, overflowMargin)
       );
       noteBlockText = lineize(svcToks).join('\n');
     }

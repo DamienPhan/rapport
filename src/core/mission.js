@@ -35,7 +35,7 @@ export function fmtTime(mins) {
 export function createMission() {
   return {
     booking: '', date: todayStr(), vol: '', terminal: '', type: 'DEP',
-    client: '', clientPhone: '', greeteur: '', greeteurPhone: '', contactPhone: '', greetSign: '', pax: '',
+    client: '', clientPhone: '', greeteur: '', greeteurPhone: '', contactPhone: '', greetSign: '', porterNote: '', pax: '',
     prebooking: 'PRÉ-BOOKING',
     detaxe: 'Non',
     lieuRencontre: 'Dépose minute',
@@ -48,6 +48,7 @@ export function createMission() {
     bagStandard: '1',
     bagExpected: '',
     bagHorsFormat: '0',
+    bagHorsFormatExpected: '',
     bagCage: '0',
     sortTime: 9999,
     bookingOptions: [],
