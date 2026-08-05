@@ -268,6 +268,7 @@ function renderMission(m, idx){
     </div>
     <div class="mission-body">
       ${renderCandidates(m, idx)}
+      ${m.greetSign ? `<div class="note-banner">🪧 ${t('note.greetSign')} : <strong>${escHtml(m.greetSign)}</strong></div>` : ''}
 
       <div class="section">
         <div class="section-title">${t('section.identity')}</div>
@@ -277,7 +278,6 @@ function renderMission(m, idx){
           <div class="field full"><label>${t('field.client')}</label><input id="${fieldId(idx,'client')}" value="${m.client}" oninput="this.value=this.value.toUpperCase()">
           ${m.clientPhone ? `<div class="tel-row"><a href="tel:${m.clientPhone}" class="tel-chip">📞 ${m.clientPhone}</a></div>` : ''}
           </div>
-          <div class="field full"><label>${t('field.greetSign')}</label><input id="${fieldId(idx,'greetSign')}" value="${m.greetSign}" placeholder="${t('field.greetSignPlaceholder')}"></div>
           <div class="field full"><label>${t('field.greeter')}</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="${t('field.greeterPlaceholder')}" oninput="this.value=this.value.toUpperCase()">
           ${m.greeteurPhone ? `<div class="tel-row"><a href="tel:${m.greeteurPhone}" class="tel-chip">📞 ${m.greeteurPhone}</a></div>` : ''}
           </div>
@@ -317,7 +317,9 @@ function renderMission(m, idx){
       <div class="section">
         <div class="section-title">${t('section.bags')}</div>
         <div class="grid">
-          <div class="field"><label>${t('field.bagStandard')}</label><input id="${fieldId(idx,'bagStandard')}" value="${m.bagStandard}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
+          <div class="field"><label>${t('field.bagStandard')}</label><input id="${fieldId(idx,'bagStandard')}" value="${m.bagStandard}" inputmode="numeric" oninput="updateTotal(${idx})">
+          ${m.bagExpected ? `<div class="hint">${t('field.bagExpectedHint', { n: m.bagExpected })}</div>` : ''}
+          </div>
           <div class="field"><label>${t('field.bagOversize')}</label><input id="${fieldId(idx,'bagHorsFormat')}" value="${m.bagHorsFormat}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
           <div class="field full"><label>${t('field.bagCage')}</label><input id="${fieldId(idx,'bagCage')}" value="${m.bagCage}" inputmode="numeric" oninput="updateTotal(${idx})"></div>
         </div>

@@ -57,6 +57,9 @@ export const translations = {
       flightSub: '2. Ton vol :',
       live: ' (LIVE)',
     },
+    note: {
+      greetSign: "Panneau d'accueil",
+    },
     section: {
       identity: 'Identité',
       flight: 'Vol',
@@ -67,8 +70,6 @@ export const translations = {
       booking: 'Booking #',
       date: 'Date',
       client: 'Client',
-      greetSign: "Panneau d'accueil (optionnel)",
-      greetSignPlaceholder: 'ex: Jean Dupont',
       greeter: 'Greeteur (optionnel)',
       greeterPlaceholder: 'ex: Linda.K',
       contactDriver: 'Contact chauffeur',
@@ -79,6 +80,7 @@ export const translations = {
       copyFlightTitle: 'Copier le numéro de vol',
       terminal: 'Terminal',
       bagStandard: 'Standard',
+      bagExpectedHint: ({ n }) => `Attendu selon le planning : ${n}`,
       bagOversize: 'Hors format',
       bagCage: 'Cage animal',
       bagTotal: 'Total bagages pris en charge',
@@ -187,6 +189,9 @@ export const translations = {
       flightSub: '2. Your flight:',
       live: ' (LIVE)',
     },
+    note: {
+      greetSign: 'Greet sign',
+    },
     section: {
       identity: 'Identity',
       flight: 'Flight',
@@ -197,8 +202,6 @@ export const translations = {
       booking: 'Booking #',
       date: 'Date',
       client: 'Client',
-      greetSign: 'Greet sign (optional)',
-      greetSignPlaceholder: 'e.g. Jean Dupont',
       greeter: 'Greeter (optional)',
       greeterPlaceholder: 'e.g. Linda.K',
       contactDriver: 'Driver contact',
@@ -209,6 +212,7 @@ export const translations = {
       copyFlightTitle: 'Copy flight number',
       terminal: 'Terminal',
       bagStandard: 'Standard',
+      bagExpectedHint: ({ n }) => `Expected per schedule: ${n}`,
       bagOversize: 'Oversized',
       bagCage: 'Animal cage',
       bagTotal: 'Total baggage handled',

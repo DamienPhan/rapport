@@ -46,6 +46,7 @@ export function createMission() {
     porteurs: '1',
     satisfaction: 'Excellente',
     bagStandard: '1',
+    bagExpected: '',
     bagHorsFormat: '0',
     bagCage: '0',
     sortTime: 9999,
