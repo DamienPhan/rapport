@@ -73,6 +73,7 @@ polling is how you know it's safe to read the screen.
 | `click-text <text>` | click first `[onclick]` element whose text matches (no quotes — see Gotchas) |
 | `fill <css-sel> <value>` | Playwright `fill()` — goes through the real input pipeline, fires `oninput=` handlers |
 | `select <css-sel> <value>` | `selectOption()` — use this for `<select>` dropdowns, not `fill` |
+| `upload <css-sel> <path>` | `setInputFiles()` on a `<input type=file>` — tests the "Charger le PDF" flow; `path` resolves relative to the repo root |
 | `type <text>` | keyboard-type into whatever is currently focused |
 | `press <key>` | press a single key (e.g. `Enter`, `Escape`) |
 | `wait <css-sel>` | wait up to 10s for an element to appear |

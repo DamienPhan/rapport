@@ -133,6 +133,25 @@ absorbe les petites variations de mise en page entre PDF.
 - **Pax** : recherché via `(N)` à partir de la position de la réf booking
   dans le texte complet (jamais autour de la position du porteur, qui
   capturerait le `(N)` de la mission précédente).
+- **Bloc « services »** (missions agence uniquement — voir `noteBlock.js`,
+  `greetSign`/bagages/détaxe/lieu réel, CLAUDE.md racine §5 point 32) : lu
+  depuis `row.noteBlockText`, **pas** `row.vn`. Un bloc services peut faire
+  15+ lignes, largement plus haut que le greeter classique — la borne
+  anchor-à-anchor (`row.vn`) peut alors tomber **avant** le haut visuel du
+  bloc d'une mission et attribuer son début à la mission précédente. Quand
+  `ranked` est vrai, `row.noteBlockText` est donc borné par les lignes de
+  porteur détectées (`porterLines[a].y` → `porterLines[a+1].y`, même
+  mécanisme déjà validé pour l'attribution du porteur — point 5 ci-dessus),
+  jamais par le milieu anchor-à-anchor. `row.vn` (greeter/porteur) n'est PAS
+  touché par ce changement — zéro risque de régression sur son côté.
+  Le token isolé `NCE` (même piège que **Vol** ci-dessus, mais sur la
+  fusion Véhicule+Note plutôt qu'Itinéraire+Véhicule) casse un motif à
+  cheval sur deux lignes (`N x BAGAGE\nNCE SUPPLÉMENTAIRE`) — `noteBlockText`
+  passe donc aussi par `stripSiteCode()` (factorisé depuis
+  `flightFromItinerary`). **Piège à garder en tête** si un futur champ est
+  ajouté au bloc services : toujours tester sur un cluster de missions
+  serrées avec un bloc haut, pas seulement sur une mission isolée — c'est
+  précisément le cas qui a révélé le bug d'attribution.
 
 **Validation empirique** : testé sur 4 plannings réels distincts
 (19/06, 20/06 x2, 21/06), **toujours 100 % des missions exactes** sur
@@ -242,6 +261,13 @@ PDF source) :
   labellisés sans `:` (« Greeter NOM ») et un greeter sans téléphone propre
   (Antoine), valide le fix de débordement de `enrichWithPhones` (voir
   CLAUDE.md racine §5 point 26). **Fixture de test.**
+- `planning-25-services-block.pdf` (25/07) — contient le bloc « services »
+  structuré des missions agence (Greet Sign, bagages inclus/supplémentaires,
+  assistance détaxe, parking pro/public/dépose-minute), valide `noteBlock.js`
+  et le fix d'attribution par lignes de porteur pour un bloc note très haut
+  (voir CLAUDE.md racine §5 point 32). **Fixture de test.** Trois autres
+  plannings du même format (26/31/24 juillet) ont servi à la validation
+  croisée mais ne sont pas committés — redemander à l'utilisateur si besoin.
 
 **Protocole minimal avant de livrer un changement touchant
 extraction/attribution** :

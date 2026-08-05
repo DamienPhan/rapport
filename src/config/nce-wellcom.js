@@ -75,6 +75,27 @@ export const siteConfig = {
     contactDriver: /contact\s+chauffeur/i,
     /** Mots qui ne sont jamais un nom de greeter (faux positifs à exclure). */
     greeterBlockWords: ['a', 'à', 'venir', 'voir'],
+    /**
+     * Bloc « services » généré par le système de booking, présent dans la
+     * note au porteur des missions agence (réservation directe). Absent des
+     * missions ACA classiques (simple greeter+tel) — voir CLAUDE.md racine.
+     */
+    greetSign: /greet\s*sign\s*:?\s*/i,
+    /** Nom capturé après `greetSign` jusqu'à l'une de ces bornes (jamais avalé). */
+    greetSignStop: /flight\s*class|={5,}/i,
+    /** Confirme la présence du bloc bagages structuré (sinon `bagSupplementaire` seul n'a pas de sens). */
+    bagStandardBlock: /x\s*bagage\s*standard/i,
+    bagSupplementaire: /(\d+)\s*x\s*bagage\s*suppl[ée]mentaire/i,
+    assistanceDetaxe: /assistance\s*d[ée]taxe/i,
+    parkingProfessionnel: /parking\s*professionnel/i,
+    parkingPublic: /parking\s*public/i,
+    deposeMinuteService: /d[ée]pose-?\s*minute/i,
+  },
+
+  /** Règles bagages propres au forfait Well'Com Air (voir bloc « services » ci-dessus). */
+  baggage: {
+    /** Nombre de bagages standard inclus dans le forfait, avant supplément. */
+    includedInPackage: 4,
   },
 
   /**

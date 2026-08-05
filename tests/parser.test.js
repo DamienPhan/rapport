@@ -18,7 +18,8 @@ import { wordsFromTextContent, missionsForPorter } from '../src/core/parser-pdf.
 import { createMission, applyPlaceDefaults, validateMission, markNoShow } from '../src/core/mission.js';
 import { generateReportText } from '../src/core/report.js';
 import { normalizePhone, extractClientPhone } from '../src/core/phone.js';
-import { enrichWithPhones } from '../src/core/enrich.js';
+import { enrichWithPhones, enrichWithNotes } from '../src/core/enrich.js';
+import { applyNoteBlock } from '../src/core/noteBlock.js';
 import { translations } from '../src/i18n/translations.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -141,6 +142,130 @@ test('enrichWithPhones ne déborde pas sur le téléphone de la mission suivante
   assert.strictEqual(missions[0].greeteurPhone, '');
 });
 
+// Bloc « services » réel (voir CLAUDE.md racine, missions agence réservation
+// directe) : nom pour le panneau d'accueil, bagages inclus + supplémentaires,
+// assistance détaxe prépayée, lieu réel de prise en charge/dépose.
+test('enrichWithNotes lit le panneau d\'accueil, ignore "null"', () => {
+  const missions = [
+    { booking: '11780-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
+    { booking: '11942-1', type: 'ARR', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
+  ];
+  const fullText = `
+11780-1
+Bounmy S
++33 6 99 02 29 57
+Greet Sign: Kristi
+Tsolakaki
+Flight Class : business
+==============================
+1 x BAGAGE STANDARD
+inclus dans le forfait
+------------------------------
+1 x DÉPOSE-MINUTE
+------------------------------
+11942-1
+François L.
++33 7 83 20 84 42
+Greet Sign: null
+Flight Class : business
+==============================
+`;
+  enrichWithNotes(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].greetSign, 'Kristi Tsolakaki');
+  assert.strictEqual(missions[1].greetSign, '');
+});
+
+test('enrichWithNotes calcule le total bagages (4 inclus + N supplémentaires)', () => {
+  const missions = [
+    { booking: '11835-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
+    { booking: '11780-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
+  ];
+  const fullText = `
+11835-1
+1 x BAGAGE STANDARD
+inclus dans le forfait
+------------------------------
+8 x BAGAGE
+SUPPLÉMENTAIRE
++10 € / piece
+------------------------------
+11780-1
+1 x BAGAGE STANDARD
+inclus dans le forfait
+------------------------------
+1 x DÉPOSE-MINUTE
+------------------------------
+`;
+  enrichWithNotes(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].bagStandard, '12'); // 4 inclus + 8 supplémentaires
+  assert.strictEqual(missions[1].bagStandard, '4'); // 4 inclus, aucun supplémentaire listé
+});
+
+test('enrichWithNotes détecte l\'assistance détaxe prépayée', () => {
+  const missions = [{ booking: '11899-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' }];
+  const fullText = `
+11899-1
+1 x BAGAGE STANDARD
+------------------------------
+1 x DÉPOSE-MINUTE
+------------------------------
+1 x ASSISTANCE
+DÉTAXE
+undefined
+------------------------------
+`;
+  enrichWithNotes(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].detaxe, 'Oui');
+});
+
+test('enrichWithNotes n\'écrit pas détaxe=Oui si le libellé est absent', () => {
+  const missions = [{ booking: '11780-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' }];
+  const fullText = '\n11780-1\n1 x BAGAGE STANDARD\n------------------------------\n1 x DÉPOSE-MINUTE\n------------------------------\n';
+  enrichWithNotes(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].detaxe, 'Non');
+});
+
+test('enrichWithNotes affine le lieu réel (Parking pro/public, Dépose-minute) selon le type', () => {
+  const missions = [
+    { booking: '11878-1', type: 'ARR', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
+    { booking: '11855-1', type: 'ARR', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Tapis bagage', lieuDepose: 'Parking pro' },
+    { booking: '11894-1', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' },
+  ];
+  const fullText = `
+11878-1
+1 x BAGAGE STANDARD
+------------------------------
+1 x PARKING
+PROFESSIONNEL
+VTC & TAXI
+------------------------------
+11855-1
+1 x BAGAGE STANDARD
+------------------------------
+1 x PARKING PUBLIC
+------------------------------
+11894-1
+1 x BAGAGE STANDARD
+------------------------------
+1 x DÉPOSE-MINUTE
+------------------------------
+`;
+  enrichWithNotes(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].lieuDepose, 'Parking pro');
+  assert.strictEqual(missions[1].lieuDepose, 'Parking public');
+  assert.strictEqual(missions[2].lieuRencontre, 'Dépose minute');
+});
+
+test('enrichWithNotes ne touche pas une mission ACA classique (sans bloc services)', () => {
+  const missions = [{ booking: '11483-500', type: 'DEP', greetSign: '', bagStandard: '1', detaxe: 'Non', lieuRencontre: 'Dépose minute', lieuDepose: 'AUTO_CHECKIN' }];
+  const fullText = '\n11483-500\nTom C\n+33 6 12 39 18 67\nGREETER : Roxane\n+33651144301\nSurement au dépose minute\n11483-501\n';
+  enrichWithNotes(missions, fullText, siteConfig);
+  assert.strictEqual(missions[0].greetSign, '');
+  assert.strictEqual(missions[0].bagStandard, '1');
+  assert.strictEqual(missions[0].detaxe, 'Non');
+  assert.strictEqual(missions[0].lieuRencontre, 'Dépose minute');
+});
+
 function leafKeyPaths(obj, prefix = '') {
   return Object.entries(obj).flatMap(([k, v]) => {
     const path = prefix ? `${prefix}.${k}` : k;
@@ -163,6 +288,7 @@ const fixtures = [
   { file: 'planning-30.pdf', porter: 'Yanis P.', expect: { hasClient: 'DC Aviation G-OPS' } },
   { file: 'planning-23-double-hash.pdf', porter: 'Damien P.', expect: { hasVol: 'EJU1687', booking: '31309' } },
   { file: 'planning-24-greeter-no-colon.pdf', porter: 'Falco P.', expect: { hasVol: 'EY37', greeteur: 'Louane' } },
+  { file: 'planning-25-services-block.pdf', porter: 'François L.', expect: { hasVol: 'AC0815', booking: '31106' } },
 ];
 
 async function runPdfTests() {
@@ -190,7 +316,18 @@ async function runPdfTests() {
       const pg = await doc.getPage(i);
       pages.push(wordsFromTextContent(await pg.getTextContent()));
     }
-    const missions = missionsForPorter(pages, fx.porter, siteConfig);
+    const rawMissions = missionsForPorter(pages, fx.porter, siteConfig);
+    // Reproduit `missionFromRow` (src/ui/app.js) : defaults -> overlay ->
+    // lieux par type -> lieu réel du bloc note appliqué APRÈS (voir
+    // parser-pdf.js `rowToFields` / noteBlock.js).
+    const missions = rawMissions.map((r) => {
+      const m = createMission();
+      Object.assign(m, r);
+      applyPlaceDefaults(m, siteConfig.places);
+      if (r.noteBlock) applyNoteBlock(m, r.noteBlock, { onlyIfEmpty: false });
+      delete m.noteBlock;
+      return m;
+    });
     test(`${fx.file} / ${fx.porter}`, () => {
       if (fx.expect.count != null) assert.strictEqual(missions.length, fx.expect.count);
       if (fx.expect.firstVol) assert.strictEqual(missions[0].vol, fx.expect.firstVol);
@@ -206,6 +343,29 @@ async function runPdfTests() {
         if (fx.expect.greeteur) assert.strictEqual(m.greeteur, fx.expect.greeteur);
       }
     });
+
+    // Bloc « services » (missions agence) : vérifié uniquement sur le
+    // fixture qui le contient — voir CLAUDE.md racine.
+    if (fx.file === 'planning-25-services-block.pdf') {
+      test(`${fx.file} / ${fx.porter} : bloc services (greetSign/bagages/détaxe/lieu réel)`, () => {
+        // 11893-1 : Départ, "1 x BAGAGE STANDARD" (aucun supplémentaire),
+        // Greet Sign "null", "1 x DÉPOSE-MINUTE", "1 x ASSISTANCE DÉTAXE".
+        const depose = missions.find((m) => m.vol === 'AF7305');
+        assert.ok(depose, 'mission AF7305 introuvable');
+        assert.strictEqual(depose.greetSign, '');
+        assert.strictEqual(depose.bagStandard, '4');
+        assert.strictEqual(depose.detaxe, 'Oui');
+        assert.strictEqual(depose.lieuRencontre, 'Dépose minute');
+
+        // 11878-1 : Arrivée, "1 x BAGAGE SUPPLÉMENTAIRE" (donc 4+1=5), Greet
+        // Sign "Bader Alosaimi", "1 x PARKING PROFESSIONNEL VTC & TAXI".
+        const arrivee = missions.find((m) => m.vol === 'KU181' && m.client === 'Bader Alosaimi');
+        assert.ok(arrivee, 'mission Bader Alosaimi introuvable');
+        assert.strictEqual(arrivee.greetSign, 'Bader Alosaimi');
+        assert.strictEqual(arrivee.bagStandard, '5');
+        assert.strictEqual(arrivee.lieuDepose, 'Parking pro');
+      });
+    }
   }
 }
 

@@ -12,7 +12,8 @@ import {
 } from '../core/mission.js';
 import { wordsFromTextContent, missionsForPorter } from '../core/parser-pdf.js';
 import { extractMissions } from '../core/parser-text.js';
-import { enrichWithPhones } from '../core/enrich.js';
+import { enrichWithPhones, enrichWithNotes } from '../core/enrich.js';
+import { applyNoteBlock } from '../core/noteBlock.js';
 import { generateReportText, resolvePlace } from '../core/report.js';
 import { createSessionStore } from '../store/session.js';
 import { t as translate, optionLabel, getLang, setLang, otherLang } from '../i18n/lang.js';
@@ -73,6 +74,23 @@ function readPdfFile(file){
   });
 }
 
+// Construit une mission depuis les champs bruts extraits par coordonnées
+// (missionsForPorter/rowToFields) : defaults -> overlay -> lieux par type
+// -> lieu réel signalé dans le bloc note (Parking pro/public, Dépose-minute),
+// qui doit être réappliqué APRÈS applyPlaceDefaults (celui-ci écrase
+// inconditionnellement lieuRencontre/lieuDepose selon le type — voir
+// parser-pdf.js `rowToFields`). `noteBlock` est un champ intermédiaire,
+// jamais un champ de mission : retiré avant de renvoyer l'objet.
+function missionFromRow(r){
+  const m = createMission();
+  Object.assign(m, r);
+  if(!r.date) m.date = todayStr();
+  applyPlaceDefaults(m, CFG.places);
+  if(r.noteBlock) applyNoteBlock(m, r.noteBlock, { onlyIfEmpty: false });
+  delete m.noteBlock;
+  return m;
+}
+
 // Recharge automatiquement les missions du porteur sélectionné depuis la
 // dernière source chargée (PDF en priorité, sinon texte collé). Ne fait rien
 // si aucun planning n'a encore été chargé, pour ne pas vider l'écran.
@@ -82,17 +100,18 @@ function reloadForPorter(){
   const text = document.getElementById('planningInput').value;
   let extracted = [];
   if(lastPdfPages){
-    extracted = missionsForPorter(lastPdfPages, porter, CFG).map(r => {
-      const m = createMission();
-      Object.assign(m, r);
-      if(!r.date) m.date = todayStr();
-      return applyPlaceDefaults(m, CFG.places);
-    });
+    extracted = missionsForPorter(lastPdfPages, porter, CFG).map(missionFromRow);
+    // Chemin coordonnées : greetSign/bagStandard/détaxe/lieux déjà fiables
+    // (voir handler PDF ci-dessous), seul enrichWithPhones reste nécessaire
+    // (contactPhone n'est jamais posé par coordonnées, voir parser-pdf.js).
     if(extracted.length && text) enrichWithPhones(extracted, text, CFG);
-    if(!extracted.length && text) extracted = extractMissions(text, porter, CFG);
+    if(!extracted.length && text){
+      extracted = extractMissions(text, porter, CFG);
+      if(extracted.length){ enrichWithPhones(extracted, text, CFG); enrichWithNotes(extracted, text, CFG); }
+    }
   } else if(text){
     extracted = extractMissions(text, porter, CFG);
-    if(extracted.length) enrichWithPhones(extracted, text, CFG);
+    if(extracted.length){ enrichWithPhones(extracted, text, CFG); enrichWithNotes(extracted, text, CFG); }
   } else {
     return; // rien de chargé
   }
@@ -258,6 +277,7 @@ function renderMission(m, idx){
           <div class="field full"><label>${t('field.client')}</label><input id="${fieldId(idx,'client')}" value="${m.client}" oninput="this.value=this.value.toUpperCase()">
           ${m.clientPhone ? `<div class="tel-row"><a href="tel:${m.clientPhone}" class="tel-chip">📞 ${m.clientPhone}</a></div>` : ''}
           </div>
+          <div class="field full"><label>${t('field.greetSign')}</label><input id="${fieldId(idx,'greetSign')}" value="${m.greetSign}" placeholder="${t('field.greetSignPlaceholder')}"></div>
           <div class="field full"><label>${t('field.greeter')}</label><input id="${fieldId(idx,'greeteur')}" list="greetersList" value="${m.greeteur}" placeholder="${t('field.greeterPlaceholder')}" oninput="this.value=this.value.toUpperCase()">
           ${m.greeteurPhone ? `<div class="tel-row"><a href="tel:${m.greeteurPhone}" class="tel-chip">📞 ${m.greeteurPhone}</a></div>` : ''}
           </div>
@@ -329,6 +349,7 @@ function renderMission(m, idx){
               <option value="Dépose minute" ${m.lieuRencontre==='Dépose minute'?'selected':''}>${opt('places','Dépose minute')}</option>
               <option value="Tapis bagage" ${m.lieuRencontre==='Tapis bagage'?'selected':''}>${opt('places','Tapis bagage')}</option>
               <option value="Parking pro" ${m.lieuRencontre==='Parking pro'?'selected':''}>${opt('places','Parking pro')}</option>
+              <option value="Parking public" ${m.lieuRencontre==='Parking public'?'selected':''}>${opt('places','Parking public')}</option>
               <option value="Linéaire Professionnel" ${m.lieuRencontre==='Linéaire Professionnel'?'selected':''}>${opt('places','Linéaire Professionnel')}</option>
               <option value="Gare routière (BUS)" ${m.lieuRencontre==='Gare routière (BUS)'?'selected':''}>${opt('places','Gare routière (BUS)')}</option>
               <option value="Loueurs" ${m.lieuRencontre==='Loueurs'?'selected':''}>${opt('places','Loueurs')}</option>
@@ -346,6 +367,7 @@ function renderMission(m, idx){
               <option value="Dépose minute" ${m.lieuDepose==='Dépose minute'?'selected':''}>${opt('places','Dépose minute')}</option>
               <option value="Tapis bagage" ${m.lieuDepose==='Tapis bagage'?'selected':''}>${opt('places','Tapis bagage')}</option>
               <option value="Parking pro" ${m.lieuDepose==='Parking pro'?'selected':''}>${opt('places','Parking pro')}</option>
+              <option value="Parking public" ${m.lieuDepose==='Parking public'?'selected':''}>${opt('places','Parking public')}</option>
               <option value="Gare routière (BUS)" ${m.lieuDepose==='Gare routière (BUS)'?'selected':''}>${opt('places','Gare routière (BUS)')}</option>
               <option value="Loueurs" ${m.lieuDepose==='Loueurs'?'selected':''}>${opt('places','Loueurs')}</option>
               <option value="Vol privé" ${m.lieuDepose==='Vol privé'?'selected':''}>${opt('places','Vol privé')}</option>
@@ -747,14 +769,17 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
       harvestRoster(fullText);
       if(missions.length) pushUndo();
 
-      let extracted = missionsForPorter(pages, porter, CFG).map(r => {
-        const m = createMission();
-        Object.assign(m, r);
-        if(!r.date) m.date = todayStr();
-        return applyPlaceDefaults(m, CFG.places);
-      });
+      let extracted = missionsForPorter(pages, porter, CFG).map(missionFromRow);
 
-      if(extracted.length === 0) extracted = extractMissions(fullText, porter, CFG);
+      // Le chemin coordonnées (missionsForPorter/rowToFields) renseigne déjà
+      // greetSign/bagStandard/détaxe/lieux de façon fiable (bande Y par
+      // mission) — enrichWithNotes (texte aplati, moins fiable sur les notes
+      // très hautes qui s'entrelacent entre missions) ne s'applique qu'au
+      // repli texte, jamais en plus du chemin coordonnées.
+      if(extracted.length === 0){
+        extracted = extractMissions(fullText, porter, CFG);
+        if(extracted.length) enrichWithNotes(extracted, fullText, CFG);
+      }
       if(extracted.length) enrichWithPhones(extracted, fullText, CFG);
 
       if(extracted.length === 0){

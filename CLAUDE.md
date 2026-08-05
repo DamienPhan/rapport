@@ -96,7 +96,7 @@ Aucun backend. `pdf.js` est chargé depuis un CDN. Les modules ES exigent
 ```js
 {
   booking, date, vol, terminal, type,       // ARR | DEP | TRS | Service
-  client, greeteur, greeteurPhone, contactPhone, pax,
+  client, greetSign, greeteur, greeteurPhone, contactPhone, pax,
   prebooking,                                // PRÉ-BOOKING | LIVE
   detaxe,                                    // Oui | Non | N/A
   lieuRencontre, lieuRencontreAutre,
@@ -109,7 +109,8 @@ Aucun backend. `pdf.js` est chargé depuis un CDN. Les modules ES exigent
 ```
 
 **Champs ajoutés récemment** : `greeteurPhone`, `contactPhone` (téléphones
-cliquables, voir `src/core/CLAUDE.md`). Le type accepte désormais **`TRS`** (transit terminal à
+cliquables, voir `src/core/CLAUDE.md`) ; `greetSign` (nom pour le panneau
+d'accueil, voir §5 point 32). Le type accepte désormais **`TRS`** (transit terminal à
 terminal) en plus de ARR/DEP/Service.
 
 **Tous les champs de `createMission()` sont des constantes fixes** (plus
@@ -142,6 +143,14 @@ valeurs sont volontairement déterministes par type, indépendamment de ce
 que dit l'itinéraire PDF. Si un cas dérogeant existe, c'est à corriger
 manuellement sur la carte.
 
+**Nuance depuis §5 point 32** : pour les missions agence dont la note au
+porteur contient le bloc « services » structuré (voir `noteBlock.js`), le
+lieu réel qui y est indiqué (Parking pro/public, Dépose-minute) **remplace**
+cette valeur déterministe — c'est une donnée réelle du booking, pas une
+extraction de l'itinéraire PDF, donc plus fiable que le tableau ci-dessus.
+Le tableau reste le seul repli quand ce bloc est absent (immense majorité
+des missions ACA classiques).
+
 ### Identification du client (`clientFromColumn` / logique équivalente PDF)
 
 - **ACA (Aéroport Nice Côte d'Azur)** : booking affiché = `M#xxxxx` (numéro
@@ -160,13 +169,17 @@ manuellement sur la carte.
 
 ### Conventions de saisie / rapport (décisions Damien)
 
-- **Bagages** : `bagStandard` vaut **1 par défaut** (les missions extraites
-  n'indiquent jamais le nombre réel) ; `bagHorsFormat` et `bagCage` valent
-  0. Hors-format et cage animal sont des **inputs numériques libres** (il
-  peut y en avoir beaucoup — l'ancien select 0–5/N-A était trop limité).
-  Dans le rapport généré, hors-format/cage affichent **`N/A` (majuscules) si
-  vide ou 0**, sinon le nombre ; le total = standard + hors-format + cage
-  (valeurs nulles ou `N/A` comptées comme 0).
+- **Bagages** : `bagStandard` vaut **1 par défaut** (les missions ACA
+  classiques n'indiquent jamais le nombre réel) ; `bagHorsFormat` et
+  `bagCage` valent 0. Hors-format et cage animal sont des **inputs
+  numériques libres** (il peut y en avoir beaucoup — l'ancien select 0–5/N-A
+  était trop limité). Dans le rapport généré, hors-format/cage affichent
+  **`N/A` (majuscules) si vide ou 0**, sinon le nombre ; le total = standard
+  + hors-format + cage (valeurs nulles ou `N/A` comptées comme 0).
+  **Exception** (§5 point 32) : les missions agence dont la note contient le
+  bloc « services » structuré ont un vrai nombre extrait — `bagStandard` =
+  bagages inclus dans le forfait (`cfg.baggage.includedInPackage`, 4 chez
+  Well'Com Air) + excédent listé séparément dans la note.
 - **NO SHOW** (`markNoShow`, bouton rouge dans l'entête de carte) : marque
   une mission « client absent ». Conserve l'**identité** (booking, date,
   client, greeteur, prébooking, type, vol, terminal) et met **tout le reste
@@ -574,6 +587,105 @@ un bug déjà corrigé) :
     déjà le bon résultat avant le fix (`refreshRosterUI()` traduisait déjà
     correctement, indépendamment de l'attribut ajouté). `npm test` : 17/17,
     inchangé.
+32. **Nouveau bloc « services » dans la note au porteur (missions agence —
+    réservation directe hors-ACA)** : l'utilisateur a fourni 4 plannings
+    réels récents (25/26/31 juillet, 24 juillet) montrant un format de note
+    beaucoup plus riche que le simple `GREETER : NOM` des missions ACA,
+    généré par le système de booking pour toute mission agence :
+    ```
+    NOM_PORTEUR
+    +33...
+    Greet Sign: NOM_CLIENT (ou "null")
+    Flight Class : business
+    ==============================
+    1 x BAGAGE STANDARD inclus dans le forfait ... dans la limite de 4 bagages...
+    ------------------------------
+    N x BAGAGE SUPPLÉMENTAIRE +10€/piece      (optionnel)
+    ------------------------------
+    1 x DÉPOSE-MINUTE / PARKING PROFESSIONNEL VTC & TAXI / PARKING PUBLIC
+    ------------------------------
+    1 x ASSISTANCE DÉTAXE                      (optionnel)
+    ```
+    Demande : extraire `Greet Sign` (nouveau champ `greetSign`, affiché sur
+    le rapport en `Panneau d'accueil : NOM`, omis comme le greeteur si vide),
+    le total réel de bagages (4 inclus + excédent, au lieu du repli fixe `1`),
+    la détaxe prépayée (`détaxe = 'Oui'` si le libellé « ASSISTANCE DÉTAXE »
+    est présent — il n'apparaît que si le client a payé), et le lieu réel
+    (Parking pro/public, Dépose-minute — remplace la règle déterministe par
+    type, voir §4).
+    - **Module `src/core/noteBlock.js`** (nouveau, pur, partagé) :
+      `parseNoteBlock(text, cfg)` lit ces 4 informations depuis un texte de
+      note ; `applyNoteBlock(mission, parsed, opts)` les applique à une
+      mission (respecte la convention lieuRencontre=départ/lieuDepose=arrivée
+      déjà utilisée par `applyPlaceDefaults` ; `opts.onlyIfEmpty` protège
+      contre l'écrasement d'une valeur déjà posée par une extraction plus
+      fiable — voir plus bas).
+    - **Chemin PDF (fiable, prioritaire)** : `rowToFields` dans
+      `parser-pdf.js` appelle `parseNoteBlock` sur le texte de colonne Note
+      **déjà borné par coordonnées** et expose le résultat brut (`noteBlock`,
+      champ intermédiaire) plutôt que de l'appliquer directement — parce que
+      `applyPlaceDefaults`, appelé après coup dans `src/ui/app.js`, écrase
+      inconditionnellement `lieuRencontre`/`lieuDepose` selon le type ; le
+      lieu réel du bloc note doit donc être réappliqué PAR-DESSUS, une fois
+      `applyPlaceDefaults` passé. Nouvelle fonction `missionFromRow(r)` dans
+      `src/ui/app.js` (factorisée, remplace 3 callbacks `.map()` dupliqués)
+      qui fait exactement ça : defaults → overlay → lieux par type → lieu
+      réel du bloc note.
+    - **Chemin copier-coller (repli)** : `enrichWithNotes` (nouveau,
+      `enrich.js`) applique le même `parseNoteBlock`/`applyNoteBlock` mais
+      sur une fenêtre de texte aplati bornée par réf booking
+      (`missionWindow`, factorisé depuis la logique déjà utilisée par
+      `contactPhone`), avec `onlyIfEmpty: true` — ne doit **jamais** tourner
+      après le chemin PDF (redondant et risqué, voir bug ci-dessous), câblée
+      uniquement sur les résultats d'`extractMissions` (`parser-text.js`).
+    - **Bug trouvé pendant la validation (bande Y insuffisante pour un bloc
+      haut)** : le premier jet lisait `row.vn` (texte de colonne déjà borné
+      par bande Y anchor-à-anchor) directement. Sur un cluster où deux
+      missions se suivent de près et où la seconde a un bloc note très haut
+      (15+ lignes), le milieu anchor-à-anchor tombe **avant** le haut visuel
+      du bloc de la seconde mission — son « Greet Sign: NOM » se retrouvait
+      donc attribué à tort à la mission précédente (cas réel détecté :
+      « Greet Sign: Kristi » d'une mission Bounmy S attribué à la mission
+      juste avant, porteur François L., sur `planning-26.pdf`). Fix : quand
+      le rang porteur↔ancre est fiable (`ranked`, déjà validé pour
+      l'attribution du porteur lui-même — §5 point 3), le texte du bloc
+      services est borné par les **lignes de porteur détectées**
+      (`porterLines[a].y` → `porterLines[a+1].y`) plutôt que par le milieu
+      anchor-à-anchor — n'affecte QUE cette extraction (`row.noteBlockText`,
+      nouveau champ), jamais `row.vn` (greeter/porteur existant, laissé
+      intact, zéro régression sur les 5 fixtures déjà validées).
+    - **Second bug trouvé (bruit `NCE` inter-colonnes)** : `noteColumns:
+      [4, 5]` fusionne Véhicule+Note ; le token isolé `NCE` de la colonne
+      Véhicule s'intercale parfois entre deux mots du bloc services répartis
+      sur deux lignes (`N x BAGAGE\nNCE SUPPLÉMENTAIRE`), cassant le motif
+      `bagSupplementaire` (cas réel : `planning-24.pdf`, Anoud Almotlag,
+      « 5 x BAGAGE SUPPLÉMENTAIRE » lu comme 0 excédent → bagStandard=4 au
+      lieu de 9). Même famille de bug que le fix historique
+      `Terminal NCE 1` → `Terminal 1` (§5 point 2), mais sur la fusion de
+      colonnes Note plutôt qu'Itinéraire. Fix : `stripSiteCode()` (factorisé
+      depuis `flightFromItinerary`, même regex) appliqué aussi à
+      `noteBlockText`.
+    - **Validation** : `parseNoteBlock`/`applyNoteBlock` testés unitairement
+      sur texte synthétique (6 tests) + un test d'intégration PDF bout-en-
+      bout sur le fixture `planning-25-services-block.pdf` (nouveau,
+      François L., mission AF7305 et mission Bader Alosaimi). Après la
+      correction des deux bugs ci-dessus, les 4 plannings fournis par
+      l'utilisateur (25/26/31/24 juillet, ~19 missions avec bloc services,
+      12 porteurs) ont été comparés un par un à une lecture manuelle du texte
+      PDF — 100 % de correspondance. `npm test` : 25/25 (17 + 6 nouveaux
+      unitaires + 2 nouveaux tests PDF), aucune régression sur les 5
+      fixtures existantes.
+    - **Skill `run-rapport`** : le driver n'avait aucun moyen de tester le
+      flux « Charger le PDF » (pas de commande d'upload de fichier). Ajout
+      de `upload <css-sel> <path>` (`page.setInputFiles`). N'a pas pu être
+      utilisé pour une vérification navigateur complète dans ce conteneur —
+      `pdf.js` est chargé depuis un CDN externe (`cdnjs.cloudflare.com`),
+      bloqué par la politique réseau de cet environnement (même contrainte
+      que l'accès à `github.io` rencontré plus tôt) — la commande reste
+      utile pour un futur environnement avec accès réseau complet. Le rendu
+      du nouveau champ (`Greet sign (optional)`) et la ligne
+      `Panneau d'accueil : NOM` du rapport ont été vérifiés dans le
+      navigateur via le flux mission manuelle (qui ne dépend pas du CDN).
 
 ---
 
