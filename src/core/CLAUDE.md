@@ -85,7 +85,14 @@ absorbe les petites variations de mise en page entre PDF.
    pattern), triés par Y. S'il y a exactement autant de noms que
    d'ancres, on aligne le k-ième nom au k-ième ancrage (`ranked = true`,
    fiable car positionnel). Sinon repli sur l'extraction par bande
-   (`porterFromLines`).
+   (`porterFromLines`). **`ranked` est un mécanisme tout-ou-rien pour LA
+   PAGE ENTIÈRE** : un seul faux positif dans le compte de noms de porteur
+   (ex. le nom du CLIENT dans « Greet Sign: NOM », qui a la même forme
+   « Prénom SURNOM » qu'un nom de porteur — voir CLAUDE.md racine §5 point
+   39) suffit à faire chuter `ranked` pour TOUTES les missions de la page,
+   pas seulement celle concernée — `detectPorterLines()` exclut donc
+   explicitement tout texte compris entre un « Greet Sign: » et sa borne de
+   fin (`greetSignStop`) de la détection de nom.
 
 **Champs extraits et leurs pièges connus** :
 
@@ -300,6 +307,13 @@ PDF source) :
   retrouvait intercalé dans le texte note, cassant `bagHorsFormat` — valide
   `stripLeakedFlightCode` (voir CLAUDE.md racine §5 point 37). **Fixture de
   test.**
+- `planning-09-greet-sign-porter-collision.pdf` (09/08, 4 pages, 12
+  porteurs) — contient une mission (Christopher Comstock/Thomas C., page 1)
+  dont le nom du client dans « Greet Sign: » a la forme d'un nom de porteur
+  et faisait chuter `ranked` pour toute la page, volant la mission de Yaris
+  K. (booking 32180) à Thomas C. — valide le fix de `detectPorterLines`
+  (exclusion de la valeur du Greet Sign, voir CLAUDE.md racine §5 point 39).
+  **Fixture de test.**
 
 **Protocole minimal avant de livrer un changement touchant
 extraction/attribution** :

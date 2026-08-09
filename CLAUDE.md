@@ -1025,6 +1025,56 @@ un bug déjà corrigé) :
     masquait un faux positif — le test passait même si `applyNoteBlock`
     n'écrasait jamais rien, la valeur de départ égalant déjà la valeur
     attendue). `npm test` : 38/38.
+39. **Bug grave d'attribution croisée — le nom du client (Greet Sign) compté
+    comme un nom de porteur** (planning du 09/08, signalé par l'utilisateur
+    en urgence : « les missions de Thomas C. ne sont pas bien détectées »,
+    « je veux plus que cela revienne »). Root cause : `detectPorterLines`
+    (`parser-pdf.js`, mécanisme d'attribution par rang — voir §5 point 3)
+    scanne TOUT le texte des colonnes Véhicule+Note d'une page à la
+    recherche de motifs « Prénom SURNOM » pour lister les porteurs. Le nom
+    du CLIENT dans « Greet Sign: NOM » (bloc services, missions agence — §5
+    point 32) a exactement la même forme qu'un nom de porteur quand le nom
+    de famille est en majuscules (cas réel : « Greet Sign: M. Christopher
+    COMSTOCK », capté comme `Christopher COMSTOCK`) — `detectPorterLines` le
+    comptait donc À TORT comme un 6ᵉ porteur alors que la page n'en avait
+    que 5. Conséquence en cascade, **beaucoup plus grave qu'un simple faux
+    positif isolé** : `ranked = porterLines.length === anchors.length`
+    devenait `false` pour TOUTE LA PAGE (6 ≠ 5), désactivant le mécanisme
+    d'attribution fiable par rang pour l'intégralité des missions de cette
+    page — pas seulement celle de Thomas C. L'attribution retombait alors
+    sur le repli fragile par bande Y (`porterFromLines`/`lineHasPorter`),
+    qui a littéralement volé la mission de **Yaris K.** (booking `32180`,
+    vol `GF24`) à **Thomas C.** — dans l'app, la mission 32180 (censée être
+    celle de Yaris K.) s'affichait avec le panneau d'accueil de Thomas C.
+    (« Christopher Comstock ») collé dessus, la mission réelle de Thomas C.
+    (Comstock, booking `2026-002795`, vol `LH1059`) disparaissant de sa
+    propre liste. Un bug d'attribution par bande sur une SEULE ligne de
+    « Greet Sign » suffit donc à corrompre l'attribution de porteur de
+    TOUTES les missions de la page, y compris celles n'ayant aucun rapport
+    avec le bloc services concerné — la classe de bug la plus sévère
+    rencontrée sur ce fichier à ce jour (comparer aux points 3/5/10/32, tous
+    limités à UNE mission mal attribuée). Fix : `detectPorterLines` exclut
+    désormais toute ligne comprise entre un « Greet Sign: » et sa borne de
+    fin (`cfg.noteLabels.greetSignStop` — « Flight Class » ou « ==== »,
+    exactement le même bornage que `parseNoteBlock`), qu'elle porte le nom
+    sur la même ligne physique ou qu'il déborde sur la/les ligne(s)
+    suivante(s) — jamais candidate à un nom de porteur, quelle que soit sa
+    forme. **Piège à garder en tête** si un futur bug d'attribution de
+    porteur semble n'affecter qu'UNE mission alors que sa cause réelle est
+    ailleurs sur la page : toujours vérifier en premier si `ranked` est
+    `false` pour la page entière (comparer `anchors.length` et
+    `porterLines.length`) avant de chercher une explication locale à cette
+    seule mission — un déséquilibre d'UNE unité suffit à dégrader
+    l'attribution de TOUTE la page. Fixture de régression committée :
+    `planning-09-greet-sign-porter-collision.pdf` (09/08, 4 pages, 12
+    porteurs) — validé porteur par porteur (`missionsForPorter` sur les 12)
+    contre une lecture manuelle du texte brut, zéro mission manquante ou
+    dupliquée après le fix. Deux tests d'intégration dédiés ajoutés
+    (Thomas C. récupère bien Comstock/LH1059 et jamais la mission 32180 de
+    Yaris K. ; Yaris K. garde bien 32180/GF24, `greetSign` vide comme
+    attendu pour une mission ACA classique, et jamais contaminé par le
+    Greet Sign de Thomas C.). `npm test` : 42/42, aucune régression sur les
+    fixtures existantes.
 
 ---
 

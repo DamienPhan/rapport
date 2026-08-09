@@ -288,7 +288,20 @@ function lieuFor(type, itin, cfg) {
 // de casser `NAME_RE` (match exact), qui peut faire chuter `ranked` pour
 // toute la page — un risque plus coûteux que le gain, qui ne concerne pas
 // cette fonction.
-function detectPorterLines(words, centers, noteCols) {
+//
+// Le nom du CLIENT dans « Greet Sign: NOM » (bloc services, missions
+// agence) peut avoir exactement la même forme qu'un nom de porteur
+// (« Prénom SURNOM » en majuscules, ex. « Christopher COMSTOCK ») et se
+// faire compter à tort comme porteur — gonflant `porterLines.length` d'une
+// unité, cassant `ranked` (porterLines.length !== anchors.length) pour
+// TOUTE la page, et faisant retomber toute l'attribution sur le repli
+// fragile par bande (cas réel : planning du 09/08, mission Christopher
+// Comstock/Thomas C. — voir CLAUDE.md racine). Fix : toute ligne comprise
+// entre un « Greet Sign: » et sa borne de fin (`greetSignStop` — « Flight
+// Class » ou « ==== », même bornage que `parseNoteBlock`) est exclue de la
+// détection de nom de porteur, qu'elle porte le nom sur la même ligne ou
+// qu'il déborde sur la/les ligne(s) suivante(s).
+function detectPorterLines(words, centers, noteCols, cfg) {
   const toks = [];
   for (const w of words) {
     const c = colOf(w.x, centers);
@@ -307,7 +320,13 @@ function detectPorterLines(words, centers, noteCols) {
   }
   if (cur.length) lines.push({ y: cyHead, text: cur.join(' ') });
   const out = [];
+  let inGreetSignValue = false;
   for (const l of lines) {
+    if (cfg.noteLabels.greetSign.test(l.text)) { inGreetSignValue = true; continue; }
+    if (inGreetSignValue) {
+      if (cfg.noteLabels.greetSignStop.test(l.text)) inGreetSignValue = false;
+      else continue;
+    }
     const n = nameFromLine(l.text);
     if (n) out.push({ y: l.y, name: n });
   }
@@ -334,7 +353,7 @@ function reconstructPage(words, cfg) {
   for (let k = 1; k < anchors.length; k++) bounds.push((anchors[k - 1].y + anchors[k].y) / 2);
   bounds.push(Infinity);
 
-  const porterLines = detectPorterLines(words, centers, noteCols);
+  const porterLines = detectPorterLines(words, centers, noteCols, cfg);
   const ranked = porterLines.length === anchors.length;
 
   const rows = [];
