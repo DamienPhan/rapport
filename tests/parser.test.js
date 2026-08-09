@@ -406,6 +406,8 @@ const fixtures = [
   { file: 'planning-04-hors-format-note.pdf', porter: 'Stéphane M.', expect: { hasVol: 'AF7314', booking: '2026-002605' } },
   { file: 'planning-04-hors-format-note.pdf', porter: 'Thomas C.', expect: { hasVol: 'AZ354', booking: '2026-002628' } },
   { file: 'planning-04-hors-format-note.pdf', porter: 'Bastien D', expect: { hasVol: 'TK1815', booking: '2026-002596' } },
+  { file: 'planning-09-greet-sign-porter-collision.pdf', porter: 'Thomas C.', expect: { hasVol: 'LH1059', booking: '2026-002795' } },
+  { file: 'planning-09-greet-sign-porter-collision.pdf', porter: 'Yaris K.', expect: { hasVol: 'GF24', booking: '32180' } },
 ];
 
 async function runPdfTests() {
@@ -528,6 +530,41 @@ async function runPdfTests() {
         assert.strictEqual(m.bagExpected, '12'); // 4 inclus + 8 supplémentaires
         assert.strictEqual(m.bagHorsFormatExpected, '1'); // avant fix : '' (perdu)
         assert.strictEqual(m.lieuDepose, 'Parking pro');
+      });
+    }
+
+    // Régression grave (signalée par l'utilisateur, « ça revient encore et
+    // encore ») : le nom du CLIENT dans « Greet Sign: NOM » (bloc services)
+    // peut avoir exactement la forme d'un nom de porteur (« Prénom SURNOM »
+    // en majuscules, ex. « Christopher COMSTOCK ») et se faire compter à
+    // tort comme porteur par `detectPorterLines` — gonflant son compte d'une
+    // unité, cassant `ranked` (porterLines.length !== anchors.length) pour
+    // TOUTE la page, et faisant retomber l'attribution de CHAQUE mission de
+    // la page sur le repli fragile par bande. Résultat observé : la mission
+    // de Yaris K. (booking 32180) était volée par Thomas C., avec le
+    // panneau d'accueil de Thomas C. (Christopher Comstock) collé dessus.
+    // Voir CLAUDE.md racine — `detectPorterLines` exclut désormais toute
+    // ligne comprise entre « Greet Sign: » et sa borne de fin.
+    if (fx.file === 'planning-09-greet-sign-porter-collision.pdf' && fx.porter === 'Thomas C.') {
+      test(`${fx.file} / ${fx.porter} : le nom du client (Greet Sign) n'est jamais compté comme porteur`, () => {
+        const m = missions.find((x) => x.vol === 'LH1059');
+        assert.ok(m, 'mission LH1059 introuvable');
+        assert.strictEqual(m.booking, '2026-002795');
+        assert.strictEqual(m.client, 'EXCELLENCE AIRPORT');
+        assert.strictEqual(m.greetSign, 'M. Christopher COMSTOCK');
+        // La mission de Yaris K. (32180) ne doit jamais apparaître pour Thomas C.
+        assert.ok(!missions.some((x) => x.booking === '32180'), 'mission 32180 volée à Yaris K.');
+      });
+    }
+    if (fx.file === 'planning-09-greet-sign-porter-collision.pdf' && fx.porter === 'Yaris K.') {
+      test(`${fx.file} / ${fx.porter} : garde sa propre mission, pas contaminée par le Greet Sign voisin`, () => {
+        const m = missions.find((x) => x.vol === 'GF24');
+        assert.ok(m, 'mission GF24 introuvable');
+        assert.strictEqual(m.booking, '32180');
+        assert.strictEqual(m.client, 'ACA ETIC');
+        assert.strictEqual(m.greetSign, ''); // mission ACA classique, pas de bloc services
+        // La mission de Thomas C. (Christopher Comstock) ne doit jamais apparaître pour Yaris K.
+        assert.ok(!missions.some((x) => x.booking === '2026-002795'), 'mission de Thomas C. volée par Yaris K.');
       });
     }
   }
