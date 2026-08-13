@@ -92,7 +92,20 @@ absorbe les petites variations de mise en page entre PDF.
    39) suffit à faire chuter `ranked` pour TOUTES les missions de la page,
    pas seulement celle concernée — `detectPorterLines()` exclut donc
    explicitement tout texte compris entre un « Greet Sign: » et sa borne de
-   fin (`greetSignStop`) de la détection de nom.
+   fin (`greetSignStop`) de la détection de nom. **Symétrique (voir CLAUDE.md
+   racine §5 point 40)** : un déséquilibre peut aussi survenir dans l'autre
+   sens — un porteur qui DISPARAÎT de `porterLines` (au lieu d'un client en
+   trop) parce qu'un résidu d'Itinéraire (ville de destination, numéro de
+   terminal) débordant en colonne Véhicule se **chaîne**, via la tolérance Y
+   de `lineize` (4pt), avec son nom sur la même bande — cassant `NAME_RE`.
+   `cfg.pdfTable.itineraryBleedGuard` exclut cette zone de `noteCols` pour
+   `detectPorterLines` (et pour `cells`/`vn`/`noteBlockText` via
+   `effectiveColOf`/`isNoteCol`), même mécanisme que
+   `noteOverflowMargin` mais côté gauche de la frontière col3/col4 plutôt
+   que côté droit de col5/col6 — et sans le même risque (une marge qui
+   EXCLUT du bruit n'a pas la contrepartie dangereuse d'une marge qui
+   INCLUT du contenu incertain, donc appliquée sans réserve à
+   `detectPorterLines`, contrairement à `noteOverflowMargin`).
 
 **Champs extraits et leurs pièges connus** :
 
@@ -313,6 +326,13 @@ PDF source) :
   et faisait chuter `ranked` pour toute la page, volant la mission de Yaris
   K. (booking 32180) à Thomas C. — valide le fix de `detectPorterLines`
   (exclusion de la valeur du Greet Sign, voir CLAUDE.md racine §5 point 39).
+  **Fixture de test.**
+- `planning-12-itinerary-name-bleed.pdf` (12/08, 3 pages, 12 porteurs) —
+  contient une mission (Ghassan S., page 2) dont le nom de porteur se fait
+  chaîner avec un résidu d'Itinéraire débordant en colonne Véhicule
+  (« 2 Nice Ghassan S. » au lieu de « Ghassan S. »), le faisant disparaître
+  de `porterLines` et faisant chuter `ranked` pour toute la page — valide le
+  fix `itineraryBleedGuard`/`isNoteCol` (voir CLAUDE.md racine §5 point 40).
   **Fixture de test.**
 
 **Protocole minimal avant de livrer un changement touchant
