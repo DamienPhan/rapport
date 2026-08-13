@@ -76,9 +76,7 @@ function colOf(x, centers) {
  * contenu propre de la colonne Type (« Arrivée », « Départ », « Bagage
  * standard »...) démarre nettement plus loin (mesuré : x>=~703, marge >25px
  * par rapport au débordement) — élargir la frontière d'une marge fixe capture
- * donc le débordement sans jamais capturer de contenu Type. Cible uniquement
- * la frontière avec la colonne qui suit la dernière colonne note ; les autres
- * frontières (ex. Itinéraire/Véhicule) restent strictes.
+ * donc le débordement sans jamais capturer de contenu Type.
  *
  * `cfg.pdfTable.noteOverflowMargin` est un pixel absolu mesuré sur NCE/
  * Well'Com Air, pas une proportion — sur un futur site à la géométrie plus
@@ -88,9 +86,32 @@ function colOf(x, centers) {
  * centres, pour ne jamais s'approcher du centre de la colonne suivante quelle
  * que soit la config du site — sans effet sur la géométrie NCE actuelle (25
  * est très en-deçà du tiers de l'écart mesuré, ~93/3≈31).
+ *
+ * Frontière opposée (Itinéraire→Véhicule, avant la première colonne note) :
+ * ici c'est l'inverse — pas un débordement à récupérer, mais un résidu
+ * d'Itinéraire à EXCLURE. Une ligne d'itinéraire wrap (ville de
+ * destination, numéro de terminal) peut retomber juste après le midpoint
+ * col3/col4 sans être du contenu Véhicule/Note réel (mesuré : x≈476-491 sur
+ * un cas réel, alors que le contenu Véhicule/Note légitime démarre à
+ * x>=~538, marge >45px). Non filtré, ce résidu se chaîne dans
+ * `detectPorterLines`/`lineize` avec le nom de porteur qui suit sur la même
+ * bande Y et casse le pattern exact `NAME_RE` (cas réel : "2 Nice Ghassan
+ * S." au lieu de "Ghassan S.", perdant un porteur entier — voir CLAUDE.md
+ * racine). `cfg.pdfTable.itineraryBleedGuard` (même plafond proportionnel
+ * que `noteOverflowMargin`) exclut cette zone de `noteCols`.
  */
-function isNoteCol(x, centers, noteCols, overflowMargin) {
-  if (noteCols.indexOf(colOf(x, centers)) >= 0) return true;
+function isNoteCol(x, centers, noteCols, overflowMargin, leftGuardMargin) {
+  const c = colOf(x, centers);
+  if (noteCols.indexOf(c) >= 0) {
+    const firstNote = Math.min(...noteCols);
+    if (c === firstNote && leftGuardMargin && firstNote > 0) {
+      const prevCol = firstNote - 1;
+      const boundary = (centers[prevCol] + centers[firstNote]) / 2;
+      const guard = Math.min(leftGuardMargin, (centers[firstNote] - centers[prevCol]) / 3);
+      if (x < boundary + guard) return false;
+    }
+    return true;
+  }
   const lastNote = Math.max(...noteCols);
   const nextCol = lastNote + 1;
   if (!overflowMargin || nextCol >= centers.length) return false;
@@ -100,17 +121,21 @@ function isNoteCol(x, centers, noteCols, overflowMargin) {
 }
 
 /**
- * Classement de colonne effectif : comme `colOf()`, mais un mot dans la
- * marge de débordement note→type (voir `isNoteCol`) est reclassé vers la
- * dernière colonne note plutôt que la colonne Type. Rend le classement
- * mutuellement exclusif — un mot n'appartient plus jamais à deux colonnes à
- * la fois (sans ça, un mot débordant restait aussi compté dans `cells[6]`,
- * utilisé pour la détection ARR/DEP via `row.c6`).
+ * Classement de colonne effectif : comme `colOf()`, mais mutuellement
+ * exclusif avec `isNoteCol()` — un mot dans la marge de débordement
+ * note→type est reclassé vers la dernière colonne note plutôt que Type, et
+ * un mot dans la marge de garde itinéraire→véhicule est reclassé vers
+ * l'Itinéraire plutôt que Véhicule (jamais compté deux fois, ni perdu).
  */
-function effectiveColOf(x, centers, noteCols, overflowMargin) {
+function effectiveColOf(x, centers, noteCols, overflowMargin, leftGuardMargin) {
   const c = colOf(x, centers);
-  if (noteCols.indexOf(c) >= 0) return c;
-  return isNoteCol(x, centers, noteCols, overflowMargin) ? Math.max(...noteCols) : c;
+  const inNote = isNoteCol(x, centers, noteCols, overflowMargin, leftGuardMargin);
+  if (noteCols.indexOf(c) >= 0) {
+    if (inNote) return c;
+    const firstNote = Math.min(...noteCols);
+    return firstNote > 0 ? firstNote - 1 : c;
+  }
+  return inNote ? Math.max(...noteCols) : c;
 }
 
 function joinCol(cells, c) {
@@ -281,13 +306,14 @@ function lieuFor(type, itin, cfg) {
   return type === 'ARR' ? cfg.places.arrDropFallback : cfg.places.depDropFallback;
 }
 
-// Classement strict (jamais `isNoteCol`/marge de débordement) : la marge de
-// débordement existe pour récupérer le dernier mot d'un Greet Sign/note
-// libre trop long, jamais observée sur un nom de porteur. L'élargir ici
-// risquerait d'agglomérer un mot Type voisin sur la même ligne qu'un nom et
-// de casser `NAME_RE` (match exact), qui peut faire chuter `ranked` pour
-// toute la page — un risque plus coûteux que le gain, qui ne concerne pas
-// cette fonction.
+// N'utilise QUE la marge de garde gauche d'`isNoteCol` (overflowMargin=0,
+// jamais la marge de débordement droite note→type) : cette dernière existe
+// pour récupérer le dernier mot d'un Greet Sign/note libre trop long,
+// jamais observée sur un nom de porteur — l'élargir ici risquerait
+// d'agglomérer un mot Type voisin sur la même ligne qu'un nom et de casser
+// `NAME_RE` (match exact). La marge de garde gauche (itinéraire→véhicule),
+// à l'inverse, ne fait qu'EXCLURE du bruit déjà démontré nuisible ici même
+// (voir plus bas) — aucun risque symétrique à l'élargissement.
 //
 // Le nom du CLIENT dans « Greet Sign: NOM » (bloc services, missions
 // agence) peut avoir exactement la même forme qu'un nom de porteur
@@ -301,11 +327,20 @@ function lieuFor(type, itin, cfg) {
 // Class » ou « ==== », même bornage que `parseNoteBlock`) est exclue de la
 // détection de nom de porteur, qu'elle porte le nom sur la même ligne ou
 // qu'il déborde sur la/les ligne(s) suivante(s).
+//
+// Un résidu d'Itinéraire (ville de destination, numéro de terminal) qui
+// déborde en colonne Véhicule peut aussi se CHAÎNER, via `lineize`, avec le
+// nom de porteur qui suit sur la même bande Y (cas réel : "2 Nice Ghassan
+// S." au lieu de "Ghassan S.", planning du 12/08 — voir CLAUDE.md racine)
+// — `NAME_RE` ne matche alors plus rien, et le porteur DISPARAÎT de
+// `porterLines` (déséquilibre inverse du cas Greet Sign : ici un porteur
+// manque plutôt qu'un client compté en trop, mais le symptôme sur `ranked`
+// est identique). La garde gauche d'`isNoteCol` filtre ce résidu en amont.
 function detectPorterLines(words, centers, noteCols, cfg) {
+  const leftGuard = cfg.pdfTable.itineraryBleedGuard || 0;
   const toks = [];
   for (const w of words) {
-    const c = colOf(w.x, centers);
-    if (noteCols.indexOf(c) >= 0) toks.push(w);
+    if (isNoteCol(w.x, centers, noteCols, 0, leftGuard)) toks.push(w);
   }
   toks.sort((a, b) => a.y - b.y || a.x - b.x);
   const lines = [];
@@ -339,6 +374,7 @@ function reconstructPage(words, cfg) {
   const bookingCol = cfg.pdfTable.bookingColumn;
   const noteCols = cfg.pdfTable.noteColumns;
   const overflowMargin = cfg.pdfTable.noteOverflowMargin || 0;
+  const leftGuard = cfg.pdfTable.itineraryBleedGuard || 0;
 
   const anchors = [];
   for (const w of words) {
@@ -365,7 +401,7 @@ function reconstructPage(words, cfg) {
       // `effectiveColOf` (pas `colOf`) : un mot dans la marge de débordement
       // note→type rejoint la dernière colonne note plutôt que `cells[6]`
       // (Type), pour ne jamais être compté deux fois (note ET c6/type).
-      if (w.y >= top && w.y < bot) cells[effectiveColOf(w.x, centers, noteCols, overflowMargin)].push(w);
+      if (w.y >= top && w.y < bot) cells[effectiveColOf(w.x, centers, noteCols, overflowMargin, leftGuard)].push(w);
     }
     const vn = lineize(noteCols.reduce((acc, c) => acc.concat(cells[c]), []));
 
@@ -384,7 +420,7 @@ function reconstructPage(words, cfg) {
       const nTop = porterLines[a].y;
       const nBot = a + 1 < porterLines.length ? porterLines[a + 1].y : Infinity;
       const svcToks = words.filter(
-        (w) => w.y >= nTop && w.y < nBot && isNoteCol(w.x, centers, noteCols, overflowMargin)
+        (w) => w.y >= nTop && w.y < nBot && isNoteCol(w.x, centers, noteCols, overflowMargin, leftGuard)
       );
       noteBlockText = lineize(svcToks).join('\n');
     }

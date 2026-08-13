@@ -408,6 +408,8 @@ const fixtures = [
   { file: 'planning-04-hors-format-note.pdf', porter: 'Bastien D', expect: { hasVol: 'TK1815', booking: '2026-002596' } },
   { file: 'planning-09-greet-sign-porter-collision.pdf', porter: 'Thomas C.', expect: { hasVol: 'LH1059', booking: '2026-002795' } },
   { file: 'planning-09-greet-sign-porter-collision.pdf', porter: 'Yaris K.', expect: { hasVol: 'GF24', booking: '32180' } },
+  { file: 'planning-12-itinerary-name-bleed.pdf', porter: 'Ghassan S.', expect: { hasVol: 'GF0025', booking: '32314' } },
+  { file: 'planning-12-itinerary-name-bleed.pdf', porter: 'Bounmy S', expect: { hasVol: 'LY223', booking: '2026-002916' } },
 ];
 
 async function runPdfTests() {
@@ -565,6 +567,33 @@ async function runPdfTests() {
         assert.strictEqual(m.greetSign, ''); // mission ACA classique, pas de bloc services
         // La mission de Thomas C. (Christopher Comstock) ne doit jamais apparaître pour Yaris K.
         assert.ok(!missions.some((x) => x.booking === '2026-002795'), 'mission de Thomas C. volée par Yaris K.');
+      });
+    }
+
+    // Régression symétrique au point 39 (nom du client compté comme
+    // porteur) : ici c'est un résidu d'Itinéraire (ville de destination,
+    // numéro de terminal débordant en colonne Véhicule) qui se chaîne avec
+    // le nom du porteur suivant sur la même bande Y et casse NAME_RE — le
+    // porteur DISPARAÎT de porterLines au lieu qu'un client y soit ajouté
+    // en trop, mais l'effet sur `ranked` (et donc sur l'attribution de
+    // TOUTE la page) est le même. Voir CLAUDE.md racine.
+    if (fx.file === 'planning-12-itinerary-name-bleed.pdf' && fx.porter === 'Ghassan S.') {
+      test(`${fx.file} / ${fx.porter} : nom de porteur non perdu par débordement Itinéraire→Véhicule`, () => {
+        const m = missions.find((x) => x.vol === 'GF0025');
+        assert.ok(m, 'mission GF0025 introuvable (Ghassan S. non détecté comme porteur)');
+        assert.strictEqual(m.booking, '32314');
+        assert.strictEqual(m.greetSign, ''); // mission ACA classique, jamais contaminée par le Greet Sign voisin (Bounmy S / Naomi Tours)
+      });
+    }
+    if (fx.file === 'planning-12-itinerary-name-bleed.pdf' && fx.porter === 'Bounmy S') {
+      test(`${fx.file} / ${fx.porter} : garde son propre Greet Sign, pas volé par le porteur voisin`, () => {
+        const m = missions.find((x) => x.vol === 'LY223');
+        assert.ok(m, 'mission LY223 introuvable');
+        assert.strictEqual(m.booking, '2026-002916');
+        assert.strictEqual(m.client, 'Naomi Tours');
+        assert.strictEqual(m.greetSign, 'Naomi Tours');
+        // La mission de Ghassan S. ne doit jamais apparaître pour Bounmy S.
+        assert.ok(!missions.some((x) => x.booking === '32314'), 'mission 32314 volée à Ghassan S.');
       });
     }
   }

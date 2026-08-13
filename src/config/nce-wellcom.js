@@ -44,6 +44,18 @@ export const siteConfig = {
      * — 25 laisse une marge de sécurité sans jamais capturer de texte Type.
      */
     noteOverflowMargin: 25,
+    /**
+     * Marge (px) au-delà de la frontière géométrique entre l'Itinéraire et
+     * la première colonne note (Véhicule), à l'intérieur de laquelle un mot
+     * est EXCLU du texte note/porteur plutôt qu'inclus (sens inverse de
+     * `noteOverflowMargin` ci-dessus) — un résidu d'itinéraire wrap (ville,
+     * numéro de terminal) peut retomber juste après ce midpoint sans être
+     * du contenu Véhicule/Note réel. Mesuré sur un cas réel : résidu à
+     * x≈476-491, contenu Véhicule/Note légitime le plus proche à x≈538-546
+     * (marge >45px) — 45 laisse une marge de sécurité sans jamais exclure
+     * de contenu Véhicule/Note réel.
+     */
+    itineraryBleedGuard: 45,
     /** Index de la colonne « booking / mission ». */
     bookingColumn: 0,
     /** Index de la colonne client. */

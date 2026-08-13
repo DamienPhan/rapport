@@ -1075,6 +1075,64 @@ un bug déjà corrigé) :
     attendu pour une mission ACA classique, et jamais contaminé par le
     Greet Sign de Thomas C.). `npm test` : 42/42, aucune régression sur les
     fixtures existantes.
+40. **Même classe de bug que le point 39, en sens inverse — un résidu
+    d'Itinéraire fait DISPARAÎTRE un nom de porteur** (planning du 12/08,
+    signalé par l'utilisateur juste après le point 39 : « ça détecte un nom
+    de panneau alors que c'est un accueil ACA », « ça détecte le nom de
+    panneau d'après »). Root cause symétrique à la précédente mais sur
+    l'AUTRE frontière de colonne (Itinéraire↔Véhicule, col3↔col4, pas
+    Note↔Type comme aux points 35-37) : sur une ligne « Terminal 2 Nice »
+    (numéro de terminal + ville de destination), le token « Nice » retombe
+    juste après le midpoint géométrique col3/col4 (x≈484, midpoint≈457) —
+    encore une fois un résidu d'Itinéraire mal classé côté Véhicule, même
+    famille que le point 37 (« TK1815 » qui débordait pareillement), mais
+    cette fois-ci ce résidu se **chaîne**, via l'algorithme de regroupement
+    en ligne de `detectPorterLines` (tolérance Y de 4pt entre tokens
+    consécutifs), avec le nom du porteur suivant sur une bande Y très
+    proche (« Ghassan S. » à seulement 0.67pt d'écart) — produisant la
+    ligne fusionnée « 2 Nice Ghassan S. » au lieu de « Ghassan S. », qui ne
+    matche plus `NAME_RE` (motif exact, 2 mots). Résultat : Ghassan S.
+    **disparaît** de `porterLines` (5 détectés au lieu de 6 anchors) —
+    déséquilibre inverse du point 39 (un porteur en moins plutôt qu'un
+    client en trop) mais même conséquence catastrophique sur `ranked` :
+    `false` pour TOUTE la page, attribution retombée sur le repli fragile
+    par bande. Symptôme observé par l'utilisateur : la mission de Nathan D
+    (booking `32145`, vol `AZ343`, mission ACA classique sans bloc
+    services) affichait le panneau d'accueil « Naomi Tours » — qui
+    appartient en réalité à la mission SUIVANTE sur la page (Bounmy S,
+    booking `2026-002916`, vol `LY223`, mission agence avec bloc services).
+    Fix : nouvelle marge de garde symétrique à `noteOverflowMargin` mais de
+    polarité inverse — `cfg.pdfTable.itineraryBleedGuard` (45px, mesuré :
+    résidu à x≈476-491, contenu Véhicule/Note légitime le plus proche à
+    x≈538-546) **exclut** (plutôt qu'inclut) la zone juste après le
+    midpoint col3/col4 du texte note/porteur. `isNoteCol()` et
+    `effectiveColOf()` (`parser-pdf.js`) acceptent désormais ce paramètre
+    en plus de `overflowMargin`, avec le même plafond proportionnel
+    (tiers de l'écart entre centres) que le point 36. Contrairement au
+    point 36 où le risque de la marge DROITE (Note→Type) justifiait
+    d'exclure `detectPorterLines` de son bénéfice, la marge GAUCHE ne fait
+    qu'**exclure** du bruit déjà démontré nuisible — aucun risque
+    symétrique, donc appliquée aussi à `detectPorterLines` (avec
+    `overflowMargin=0` pour ne jamais réintroduire le risque du point 36).
+    **Piège à garder en tête** : les DEUX frontières de colonne fusionnées
+    dans ce fichier (col3↔col4 pour `itin`, col4↔col5↔col6 pour le texte
+    note) sont maintenant connues comme des points de débordement dans les
+    DEUX sens — token qui bave hors de sa colonne d'origine (points 2, 35,
+    37) ET token qui vole/fait disparaître le contenu d'une colonne voisine
+    en se chaînant avec lui (points 32, 39, 40). Toujours envisager cette
+    classe de bug en premier — et vérifier `ranked`/le déséquilibre
+    anchors vs porterLines pour TOUTE la page, pas seulement la mission
+    signalée — si un futur bug d'attribution ou de contenu manquant/en trop
+    touche le bloc note ou l'attribution de porteur. Fixture de régression
+    committée : `planning-12-itinerary-name-bleed.pdf` (12/08, 3 pages, 12
+    porteurs) — validé porteur par porteur contre une lecture manuelle,
+    zéro mission manquante ou dupliquée après le fix. Deux tests
+    d'intégration dédiés ajoutés (Ghassan S. récupère bien sa mission
+    GF0025 avec `greetSign` vide ; Bounmy S garde bien son propre Greet
+    Sign « Naomi Tours » et jamais la mission de Ghassan S.). `npm test` :
+    46/46, aucune régression sur les fixtures existantes (dont le fixture
+    du point 39, confirmant que la nouvelle marge de garde gauche ne casse
+    pas le fix précédent).
 
 ---
 
